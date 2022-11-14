@@ -1964,7 +1964,7 @@ inline bool link_programs(size_t num_programs, const std::string* programs[],
     if (linked_cubin) *linked_cubin = *programs[0];
     return true;
   }
-#if CUDA_VERSION >= 11040
+#if CUDA_VERSION >= 11040 && defined(JITIFY_ENABLE_LTO)
   for (size_t i = 0; i < num_programs; ++i) {
     if (program_types[i] == CU_JIT_INPUT_NVVM) {
       option_keys.push_back(CU_JIT_LTO);
@@ -2010,7 +2010,7 @@ inline bool link_programs(size_t num_programs, const std::string* programs[],
       link_files = vals;
     } else if (key == "-L") {
       link_paths = vals;
-#if CUDA_VERSION >= 11040
+#if CUDA_VERSION >= 11040 && defined(JITIFY_ENABLE_LTO)
       // LTO optimization options.
     } else if (key == "-ftz" || key == "--ftz") {
       option_keys.push_back(CU_JIT_FTZ);
@@ -2266,7 +2266,7 @@ inline LinkedProgram LinkedProgram::link(
                                            ? compiled_program.cubin()
                                            : compiled_program.ptx();
     CUjitInputType program_type =
-#if CUDA_VERSION >= 11040
+#if CUDA_VERSION >= 11040 && defined(JITIFY_ENABLE_LTO)
         !compiled_program.nvvm().empty() ? CU_JIT_INPUT_NVVM :
 #endif
                                          !compiled_program.cubin().empty()
