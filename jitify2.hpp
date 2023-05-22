@@ -3602,7 +3602,6 @@ typedef signed short int_least16_t;
 typedef signed int int_least32_t;
 typedef signed long long int_least64_t;
 typedef signed long long intmax_t;
-
 typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
 typedef unsigned int uint32_t;
@@ -3616,7 +3615,6 @@ typedef unsigned short uint_least16_t;
 typedef unsigned int uint_least32_t;
 typedef unsigned long long uint_least64_t;
 typedef unsigned long long uintmax_t;
-
 )");
 
 JITIFY_DEFINE_C_AND_CXX_HEADERS(stdio, "#include <cstddef>", R"(
