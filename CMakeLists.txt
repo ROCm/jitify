@@ -23,12 +23,6 @@ project(jitify LANGUAGES CXX HIP)
 # Set the path to libhipcxx GitHub repository inside the build directory
 set(LIBHIPCXX_DIR ${CMAKE_BINARY_DIR}/libhipcxx)
 
-# Print error if GITHUB_USER or GITHUB_PASS are not set
-if(NOT DEFINED ENV{GITHUB_USER})
-  message(FATAL_ERROR "ERROR: GITHUB_USER or GITHUB_PASS are not set. Libhipcxx is not cloned!")
-endif()
-
-# Todo(HIP): Remove "--branch hiprtc" once hiprtc branch in libhipcxx is merged with the main branch 
 # Download libhipcxx repository using Git
 find_package(Git REQUIRED)
 execute_process(

@@ -40,19 +40,6 @@ export JITIFY_ROOT="$(cd "$(dirname "$0")" && cd ../ && pwd)"
 echo "Check environment"
 env
 
-echo "Check that Github access token is set up"
-if [ -z ${GITHUB_PASS} ]
-then 
-  echo "Error: You need to set GITHUB_PASS (personal access token) to install jitify dependencies via rapids-cmake from github"	
-  exit -1
-fi
-
-if [ -z ${GITHUB_USER} ]
-then 
-  echo "Error: You need to set GITHUB_USER (personal access token) to install jitify dependencies via rapids-cmake from github"	
-  exit -1
-fi
-
 echo "Check GPU usage"
 rocm-smi
 
@@ -69,4 +56,3 @@ mkdir -p build
 cd build
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=hipcc ..
 make
-
