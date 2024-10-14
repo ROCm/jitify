@@ -2573,20 +2573,28 @@ inline int get_current_device_compute_capability(std::string* error = nullptr) {
     return 0;
   }
 
-  //FIXME(HIP): this only works for architecture strings with 6 characters
-  char gcnArchNameSubstr[6];
-  strncpy(gcnArchNameSubstr, device_prop.gcnArchName, 6);
+  std::string gcnArchNameSubstr;
+  std::smatch match;
+  std::string gcnArchNameFull(device_prop.gcnArchName);
 
-  if(strcmp(gcnArchNameSubstr, "gfx908") == 0) {
+  const std::regex gfxArchPattern("(gfx[0-9a-fA-F]+)(:[-+:\\w]+)?");
+
+  if (std::regex_search(gcnArchNameFull, match, gfxArchPattern)) {
+    gcnArchNameSubstr = match[1].str(); // Extract the first capture group
+  }
+
+  if(gcnArchNameSubstr == "gfx908") {
     arch_num = 908;
-  } else if(strcmp(gcnArchNameSubstr, "gfx90a") == 0) {
+  } else if(gcnArchNameSubstr == "gfx90a") {
     arch_num = 910;
-  } else if(strcmp(gcnArchNameSubstr, "gfx940") == 0) {
+  } else if(gcnArchNameSubstr == "gfx940") {
     arch_num = 940;
-  } else if(strcmp(gcnArchNameSubstr, "gfx941") == 0) {
+  } else if(gcnArchNameSubstr == "gfx941") {
     arch_num = 941;
-  } else if(strcmp(gcnArchNameSubstr, "gfx942") == 0) {
+  } else if(gcnArchNameSubstr == "gfx942") {
     arch_num = 942;
+  } else if(gcnArchNameSubstr == "gfx1100") {
+    arch_num = 1100;
   } else {
     if(error) *error = "Could not identify GPU architecture or an unsupported GPU architecture was found.";
     return 0;
