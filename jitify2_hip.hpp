@@ -2833,6 +2833,20 @@ inline bool compile_program(
     }
   }
 
+  // NOTE(HIP/AMD): We have to populate the map here
+  // *before* compiling the bitcode 
+  // with hiprtcCompileProgram, as this seems to invalidate 
+  // the previously added name expressions.
+  // Essentially, the name expressions could then
+  // no longer be lowered and hiprtc would fail 
+  // with HIPRTC_ERROR_INVALID_NAME_EXPRESSION.
+  for (const auto& name_expression : name_expressions) {
+    const char* lowered_name_c;
+    JITIFY_CHECK_HIPRTC(hiprtc().GetLoweredName()(
+        hiprtc_program, name_expression.c_str(), &lowered_name_c));
+    lowered_name_map->emplace(name_expression, lowered_name_c);
+  }
+
   if (bitcode) {
     // need to recompile for hiprtc, as LLVM bitcode generation requires flag
     // -fgpu-rdc
@@ -2850,12 +2864,6 @@ inline bool compile_program(
     }
   }
 
-  for (const auto& name_expression : name_expressions) {
-    const char* lowered_name_c;
-    JITIFY_CHECK_HIPRTC(hiprtc().GetLoweredName()(
-        hiprtc_program, name_expression.c_str(), &lowered_name_c));
-    lowered_name_map->emplace(name_expression, lowered_name_c);
-  }
 
 #undef JITIFY_CHECK_HIPRTC
   return true;
