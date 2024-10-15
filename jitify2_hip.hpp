@@ -657,10 +657,7 @@ inline std::string reflect() {
  */
 template <typename T>
 inline std::string reflect(const T& value) {
-  //Todo(hip): GetLoweredName does presently not work with input strings like (int)3,
-  // see SWDEV-379212
-  //return "(" + reflect<T>() + ")" + detail::value_string(value);
-   return detail::value_string(value);
+  return "(" + reflect<T>() + ")" + detail::value_string(value);
 }
 
 /*! Generate a code-string for an integer non-type template argument

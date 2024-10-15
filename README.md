@@ -21,7 +21,7 @@ A single-header C++ library for simplifying the use of HIP Runtime Compilation (
 This is a port of the original CUDA version at https://github.com/NVIDIA/jitify/tree/jitify2 to HIP in order to enable support for AMD GPUs.
 
 # Requirements
-- ROCm and HIP 5.6.0 or higher
+- ROCm and HIP 6.2.0 or higher
 - CMake 3.9 or higher (for building the tests)
 - AMD MI100/MI200 GPUs
 - Linux distribution (tested with Ubuntu 20.04+)
@@ -41,7 +41,6 @@ The following tests are only supported partially or have been disabled or they h
 
 | Test | Status | Comment |  Related to Ticket |
 | ---- | --------- | ------- | -------------------- |
-| Simple | modified | get_lowered_name fails for arguments of the form my_kernel<(int)3, float> | SWDEV-379212 |
 | Minify | modified | Header includes in jit-source were disabled, as they yield errors during JIT-compilation |  SWDEV-419480  |
 | AssertHeader | disabled | Failing assert crashes the host process with HIP, so the test would fail with HIP. This is a different behaviour between CUDA and HIP. | n/a |
 | ConstantMemory | modified | Currently, we do not have a way to extract mangled symbol names from some intermediate code representation (like ptx on NVIDIA side). Symbols therefore are kept tracked of by adding their name expressions manually in the test. | n/a |

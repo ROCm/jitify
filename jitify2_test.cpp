@@ -122,8 +122,6 @@ __global__ void my_kernel(T* data) {
   ASSERT_EQ(get_error(preprog), "");
   std::string kernel_inst =
       Template("my_kernel").instantiate(3, type_of(*d_data));
-  // todo(hip): WAR for SWDEV-379212
-  kernel_inst = "my_kernel<3,float>";
 
   auto compiled =
       CompiledProgram::deserialize(preprog->compile(kernel_inst)->serialize());
@@ -1279,14 +1277,10 @@ __global__ void nontype_kernel() {}
       preprog->get_kernel(type_kernel.instantiate<T>())->lowered_name(), \
       preprog->get_kernel(type_kernel.instantiate({#T}))->lowered_name())
 
-  // todo(hip): when using template based reflection, instantiate<T> does
-  // reorder expressions such as "const volatile float" -> "float const
-  // volatile"
   JITIFY_TYPE_REFLECTION_TEST(float const volatile);
   JITIFY_TYPE_REFLECTION_TEST(float* const volatile);
   JITIFY_TYPE_REFLECTION_TEST(float const volatile&);
-  // JITIFY_TYPE_REFLECTION_TEST(Base * (const volatile float));  //todo(hip):
-  // reflection is not working properly currently
+  JITIFY_TYPE_REFLECTION_TEST(Base * (const volatile float));
   JITIFY_TYPE_REFLECTION_TEST(float const volatile[4]);
 
 #undef JITIFY_TYPE_REFLECTION_TEST
@@ -1305,13 +1299,8 @@ __global__ void nontype_kernel() {}
       preprog->get_kernel(nontype_kernel.instantiate(N))->lowered_name(), \
       preprog->get_kernel(nontype_kernel.instantiate({#N}))->lowered_name())
 
-  // JITIFY_NONTYPE_REFLECTION_TEST(7); //todo(hip): this test is not working
-  // due to a bug in hiprtc, it may be resolved with ticket
-  // SWDEV-379212
-  // JITIFY_NONTYPE_REFLECTION_TEST('J'); //todo(hip): this test is not working
-  // due to a bug in hiprtc, it may be resolved with ticket
-  // SWDEV-379212
-
+  JITIFY_NONTYPE_REFLECTION_TEST(7);
+  JITIFY_NONTYPE_REFLECTION_TEST('J');
 #undef JITIFY_NONTYPE_REFLECTION_TEST
 }
 
