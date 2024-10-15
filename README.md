@@ -44,7 +44,6 @@ The following tests are only supported partially or have been disabled or they h
 | Minify | modified | Header includes in jit-source were disabled, as they yield errors during JIT-compilation |  SWDEV-419480  |
 | AssertHeader | disabled | Failing assert crashes the host process with HIP, so the test would fail with HIP. This is a different behaviour between CUDA and HIP. | n/a |
 | ConstantMemory | modified | Currently, we do not have a way to extract mangled symbol names from some intermediate code representation (like ptx on NVIDIA side). Symbols therefore are kept tracked of by adding their name expressions manually in the test. | n/a |
-| LinkExternalFiles | disabled | There is a bug in hipRTC when linking external file and a compiled program in memory. | SWDEV-415448 |
 | LinkCurrentExecutable | disabled | Hiprtc presently does not allow to link input type HIPRTC_JIT_INPUT_OBJECT. | SWDEV-419737 |
 | RemovedUnusedGlobals | disabled | Checks CUDA-/NVRTC-specific features: Currently, we do not have a way to extract unused global variables from some intermediate code representation (like ptx on NVIDIA side). |  |
 | ArchFlags | modified | We cannot get arch name on the device with __HIP_ARCH__.  |  |

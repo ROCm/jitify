@@ -991,50 +991,47 @@ __global__ void my_kernel(int* data) {
   CHECK_HIPRT(hipFree(d_data));
 }
 
-// TODO(HIP/AMD): This test is currently not working due to a bug in hiprtc with
-// ROCm >=5.5. It should run when ticket
-// SWDEV-415448 has been resolved (with
-// ROCm 5.7) TEST(Jitify2Test, LinkExternalFiles) {
-//   static const char* const source1 = R"(
-//__constant__ int c = 5;
-//__device__ int d = 7;
-//__device__ int f(int i) { return i + 11; })";
+TEST(Jitify2Test, LinkExternalFiles) {
+  static const char* const source1 = R"(
+__constant__ int c = 5;
+__device__ int d = 7;
+__device__ int f(int i) { return i + 11; })";
 
-//  static const char* const source2 = R"(
-// extern __constant__ int c;
-// extern __device__ int d;
-// extern __device__ int f(int);
-//__global__ void my_kernel(int* data) {
-//  *data = f(*data + c + d);
-//})";
+ static const char* const source2 = R"(
+extern __constant__ int c;
+extern __device__ int d;
+extern __device__ int f(int);
+__global__ void my_kernel(int* data) {
+ *data = f(*data + c + d);
+})";
 
-//  // Ensure temporary file is deleted at the end.
-//  std::unique_ptr<const char, int (*)(const char*)> bc_filename(
-//      "example_headers/linktest.bc", std::remove);
-//  {
-//    std::ofstream bc_file(bc_filename.get());
-//    bc_file.exceptions(std::ofstream::failbit | std::ofstream::badbit);
-//    bc_file << Program("linktest_program1", source1)
-//                    ->preprocess({"-fgpu-rdc"})
-//                    ->compile()
-//                    ->bitcode();
-//  }
-//  const std::vector<std::string> linker_options = {"-Lexample_headers",
-//                                                      "-llinktest.bc"};
-//    Kernel kernel = Program("linktest_program2", source2)
-//                        ->preprocess({"-fgpu-rdc"}, linker_options)
-//                        ->get_kernel("my_kernel");
-//    int* d_data;
-//    CHECK_HIPRT(hipMalloc((void**)&d_data, sizeof(int)));
-//    int h_data = 3;
-//    CHECK_HIPRT(
-//        hipMemcpy(d_data, &h_data, sizeof(int), hipMemcpyHostToDevice));
-//    ASSERT_EQ(kernel->configure(1, 1)->launch(d_data), "");
-//    CHECK_HIPRT(
-//        hipMemcpy(&h_data, d_data, sizeof(int), hipMemcpyDeviceToHost));
-//    EXPECT_EQ(h_data, 26);
-//    CHECK_HIPRT(hipFree(d_data));
-//}
+ // Ensure temporary file is deleted at the end.
+ std::unique_ptr<const char, int (*)(const char*)> bc_filename(
+     "example_headers/linktest.bc", std::remove);
+ {
+   std::ofstream bc_file(bc_filename.get());
+   bc_file.exceptions(std::ofstream::failbit | std::ofstream::badbit);
+   bc_file << Program("linktest_program1", source1)
+                   ->preprocess({"-fgpu-rdc"})
+                   ->compile()
+                   ->bitcode();
+ }
+ const std::vector<std::string> linker_options = {"-Lexample_headers",
+                                                     "-llinktest.bc"};
+   Kernel kernel = Program("linktest_program2", source2)
+                       ->preprocess({"-fgpu-rdc"}, linker_options)
+                       ->get_kernel("my_kernel");
+   int* d_data;
+   CHECK_HIPRT(hipMalloc((void**)&d_data, sizeof(int)));
+   int h_data = 3;
+   CHECK_HIPRT(
+       hipMemcpy(d_data, &h_data, sizeof(int), hipMemcpyHostToDevice));
+   ASSERT_EQ(kernel->configure(1, 1)->launch(d_data), "");
+   CHECK_HIPRT(
+       hipMemcpy(&h_data, d_data, sizeof(int), hipMemcpyDeviceToHost));
+   EXPECT_EQ(h_data, 26);
+   CHECK_HIPRT(hipFree(d_data));
+}
 
 namespace a {
 __host__ __device__ int external_device_func(int i) { return i + 1; }
