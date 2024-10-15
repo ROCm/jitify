@@ -2124,16 +2124,13 @@ inline bool link_programs_hiplink(size_t num_programs,
     std::string val = !vals.empty() ? vals.back() : "";
 
     if (key == "-g") {
-      // Todo(HIP): Need to pass the pointer instead of the value
-      // SWDEV-415439
       int d = 1;
       option_keys.push_back(HIPRTC_JIT_GENERATE_DEBUG_INFO);
-      option_vals.push_back((void*)(intptr_t)&d);
+      option_vals.push_back((void*)(intptr_t)d);
 
-      // SWDEV-415439
       int l = 1;
       option_keys.push_back(HIPRTC_JIT_GENERATE_LINE_INFO);
-      option_vals.push_back((void*)(intptr_t)&l);
+      option_vals.push_back((void*)(intptr_t)l);
     } else if (key == "--offload-arch" || key == "--gpu-name" ||
                key == "--gpu-architecture") {
       if (val.substr(0, 3) != "gfx") {
@@ -2146,10 +2143,8 @@ inline bool link_programs_hiplink(size_t num_programs,
         return false;
       }
       int arch = std::atoi(val.substr(3).c_str());
-      // Todo(HIP): Need to pass the pointer instead of the value
-      // SWDEV-415439
       option_keys.push_back(HIPRTC_JIT_TARGET);
-      option_vals.push_back((void*)(intptr_t)&arch);
+      option_vals.push_back((void*)(intptr_t)arch);
     } else if (key == "-O" || key == "--opt-level") {
       option_keys.push_back(HIPRTC_JIT_OPTIMIZATION_LEVEL);
       int opt_level = std::atoi(val.c_str());
