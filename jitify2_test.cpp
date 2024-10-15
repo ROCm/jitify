@@ -1426,15 +1426,18 @@ TEST(Jitify2Test, Minify) {
  #include "example_headers/my_header1.cuh"
  __global__ void my_kernel() {}
  )";
+  // NOTE(HIP/AMD): hiprtc/hipcc will add a generated cuid to the binary.
+  // This cuid is different between the binaries even if exactly the same source code is compiled twice.
+  // Therefore, we disable the cuid as only then, the generated binaries in this test match exactly.
   PreprocessedProgram preprog =
-      Program(name, source)->preprocess({"-I" HIPCUB_DIR, "-I" HIP_INC_DIR});
+      Program(name, source)->preprocess({"-I" HIPCUB_DIR, "-I" HIP_INC_DIR, "-fuse-cuid=none"});
   ASSERT_EQ(get_error(preprog), "");
   CompiledProgram compiled = preprog->compile();
   ASSERT_EQ(get_error(compiled), "");
   std::string orig_binary = compiled->binary();
 
   preprog = Program(name, source)
-                ->preprocess({"-I" HIPCUB_DIR, "-I" HIP_INC_DIR, "--minify"});
+                ->preprocess({"-I" HIPCUB_DIR, "-I" HIP_INC_DIR, "--minify", "-fuse-cuid=none"});
   ASSERT_EQ(get_error(preprog), "");
   EXPECT_LT(preprog->source().size(), source.size());
   compiled = preprog->compile();
