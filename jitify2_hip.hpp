@@ -5596,7 +5596,6 @@ inline PreprocessedProgram PreprocessedProgram::preprocess(
           "Architecture flags passed to preprocess() must be explicit.");
     }
     if (!given_cc) break;
-    // todo(HIP): I (PS) do not quite understand the role of visited here, need to clarify with MN.
     if (!visited) {
       given_cc =
           detail::limit_to_supported_compute_capability(given_cc);
@@ -6719,10 +6718,7 @@ class ProgramCache {
                                     error);
       }
       int compute_capability;
-      // Todo(HIP): For consistency with upstream, do not change the return type
-      // of parse_arch_flag instead, add "a" to the arch name whenever it is
-      // required.
-      std::string mi210_postfix = "a";
+
       if (given_cc > 0) {
         compute_capability = given_cc;
       } else {
