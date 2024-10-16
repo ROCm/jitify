@@ -40,6 +40,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <regex>
 
 #include "gtest/gtest.h"
 
@@ -66,6 +67,20 @@
       ASSERT_EQ(status, hipSuccess);                                      \
     }                                                                     \
   } while (0)
+
+#define UTILS_CHECK_HIP(call)                                             \
+  do {                                                                    \
+    hipError_t status = call;                                             \
+    if (status != hipSuccess) {                                           \
+      std::cout << "(HIP) returned " << hipGetErrorString(status);        \
+      std::cout << " (" << __FILE__ << ":" << __LINE__ << ":" << __func__ \
+                << "())" << std::endl;                                    \
+    }                                                                     \
+  } while (0)
+
+#define JITIFY_THROW_OR_TERMINATE(msg)                           \
+  throw std::runtime_error(std::string("Jitify fatal error: ") + \
+                           std::string(msg))
 
 using namespace jitify2;
 using namespace jitify2::reflection;
@@ -96,6 +111,70 @@ bool not_contains(const StringVec& v, const std::string& s,
   if (!result) debug_print(v, varname);
   return result;
 }
+
+// some helpers for AMD backend
+std::string get_arch_name_of_current_device() {
+  hipDevice_t device;
+  hipDeviceProp_t device_prop;
+
+  UTILS_CHECK_HIP(hipGetDevice(&device));
+  UTILS_CHECK_HIP(hipGetDeviceProperties(&device_prop, device));
+
+  const std::regex gfx_arch_pattern("(gfx[0-9a-fA-F]+)(:[-+:\\w]+)?");
+
+  std::smatch match;
+  std::string full_arch_name(device_prop.gcnArchName);
+  std::string short_arch_name;
+    
+  if (std::regex_search(full_arch_name, match, gfx_arch_pattern)) {
+    short_arch_name = match[1].str(); // Extract the first capture group
+  }
+  else {
+    JITIFY_THROW_OR_TERMINATE("Cannot determine target architecture name of current device!");
+  }
+
+  return short_arch_name;
+}
+
+#ifdef __HIP_PLATFORM_AMD__
+std::string get_llvm_ir_target_features_for_arch(const std::string& arch_name) {
+  std::string result = "";
+    
+  // FIXME(HIP/AMD): Instead of hardcoding these strings, we might want to rely on Jitify to compile a dummy UDF to LLVM IR and extract the required attributes string
+  if(arch_name=="gfx908") {
+    result = "+16-bit-insts,+ci-insts,+dl-insts,+dot1-insts,+dot10-insts,+dot2-insts,+dot3-insts,+dot4-insts,+dot5-insts,+dot6-insts,+dot7-insts,+dpp,+gfx8-insts,+gfx9-insts,+mai-insts,+s-memrealtime,+s-memtime-inst,+wavefrontsize64";
+  }
+  else if(arch_name=="gfx90a") {
+    result = "+16-bit-insts,+atomic-buffer-global-pk-add-f16-insts,+atomic-fadd-rtn-insts,+ci-insts,+dl-insts,+dot1-insts,+dot10-insts,+dot2-insts,+dot3-insts,+dot4-insts,+dot5-insts,+dot6-insts,+dot7-insts,+dpp,+gfx8-insts,+gfx9-insts,+gfx90a-insts,+mai-insts,+s-memrealtime,+s-memtime-inst,+wavefrontsize64";    
+  }
+  else if(arch_name=="gfx940" || arch_name=="gfx941" || arch_name=="gfx942") {
+    result = "+16-bit-insts,+atomic-buffer-global-pk-add-f16-insts,+atomic-ds-pk-add-16-insts,+atomic-fadd-rtn-insts,+atomic-flat-pk-add-16-insts,+atomic-global-pk-add-bf16-inst,+ci-insts,+dl-insts,+dot1-insts,+dot10-insts,+dot2-insts,+dot3-insts,+dot4-insts,+dot5-insts,+dot6-insts,+dot7-insts,+dpp,+fp8-insts,+gfx8-insts,+gfx9-insts,+gfx90a-insts,+gfx940-insts,+mai-insts,+s-memrealtime,+s-memtime-inst,+wavefrontsize64";
+  }
+  else if(arch_name=="gfx1100") {
+    result = "+16-bit-insts,+atomic-fadd-rtn-insts,+ci-insts,+dl-insts,+dot10-insts,+dot5-insts,+dot7-insts,+dot8-insts,+dot9-insts,+dpp,+gfx10-3-insts,+gfx10-insts,+gfx11-insts,+gfx8-insts,+gfx9-insts,+wavefrontsize32";
+  }
+  else {
+    JITIFY_THROW_OR_TERMINATE("Cannot determine LLVM IR target features for current architecture or an unsupported architecture is used (currently, only gfx908, gfx90a, gfx940, gfx941, gfx942 and gfx1100 are supported!).");
+  }
+  return result;
+}
+
+std::string get_llvm_ir_target_features_for_current_arch() {
+  return get_llvm_ir_target_features_for_arch(get_arch_name_of_current_device());
+}
+
+std::string adapt_llvm_ir_attributes_for_current_arch(const std::string& llvm_ir) {
+  std::string target_features = get_llvm_ir_target_features_for_current_arch();
+  std::string target_cpu = "\"target-cpu\"=\"" + get_arch_name_of_current_device();
+  std::regex target_feat_pattern("\"target-features\"=\"[^\"]+");
+  std::regex target_cpu_pattern("\"target-cpu\"=\"[^\"]+");
+
+  std::string result = std::regex_replace(llvm_ir, target_feat_pattern, "\"target-features\"=\"" + target_features);
+  result = std::regex_replace(result, target_cpu_pattern, target_cpu);
+
+  return result;
+}
+#endif
 
 #define CONTAINS(src, target) contains(src, target, #src)
 #define NOT_CONTAINS(src, target) not_contains(src, target, #src)
@@ -161,26 +240,6 @@ __device__ T pointless_func(T x) {
     // Find this file through other mechanisms.
     return false;
   }
-}
-
-// Returns, e.g., "gfx90a" for an MI200 device
-std::string get_current_device_arch() {
-  hipDevice_t device = 0;
-  hipDeviceProp_t device_prop;
-  std::string arch_name;
-  hipError_t ret;
-
-  if ((ret = hipGetDeviceProperties(&device_prop, device)) != hipSuccess) {
-    return std::to_string(ret);
-  }
-  arch_name = device_prop.gcnArchName;
-  size_t startPos = 0;
-  size_t endPos = arch_name.find(":", startPos);
-  if (endPos == std::string::npos) {
-    return "gfx not found in the arch_name string";
-  }
-  arch_name = arch_name.substr(startPos, endPos - (startPos));
-  return arch_name;
 }
 
 TEST(Jitify2Test, MultipleKernels) {
@@ -602,6 +661,8 @@ attributes #2 = { convergent mustprogress noinline nounwind "no-trapping-math"="
 !11 = !{!12, !12, i64 0}
 !12 = !{!"float", !9, i64 0}
     )'''";
+
+  amd_llvm_ir_udf = adapt_llvm_ir_attributes_for_current_arch(amd_llvm_ir_udf);
 
   using key_type = uint32_t;
   size_t max_size = 2;
@@ -1165,7 +1226,7 @@ __global__ void my_kernel( char* data) {
   arch = data;
 }
 )";
-  std::string current_arch = get_current_device_arch();
+  std::string current_arch = get_arch_name_of_current_device();
   char* arch_char;
 
   // Test default behavior (automatic architecture detection).
