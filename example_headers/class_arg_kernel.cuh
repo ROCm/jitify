@@ -1,5 +1,7 @@
+#include "hip/hip_runtime.h"
 /*
  * Copyright (c) 2017-2020, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2024 Advanced Micro Devices, Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,17 +34,17 @@ class Managed {
  public:
   void* operator new(size_t len) {
     void* ptr = nullptr;
-#ifndef __CUDACC_RTC__
-    cudaMallocManaged(&ptr, len);
-    cudaDeviceSynchronize();
+#ifndef __HIPCC_RTC__
+    hipMallocManaged(&ptr, len);
+    hipDeviceSynchronize();
 #endif
     return ptr;
   }
 
   void operator delete(void* ptr) {
-#ifndef __CUDACC_RTC__
-    cudaDeviceSynchronize();
-    cudaFree(ptr);
+#ifndef __HIPCC_RTC__
+    hipDeviceSynchronize();
+    hipFree(ptr);
 #endif
   }
 };
