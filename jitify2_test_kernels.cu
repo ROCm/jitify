@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2017-2020, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2024 Advanced Micro Devices, Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,11 +27,14 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "hip/hip_runtime.h"
 // This file is preprocessed offline and then used in the test suite.
-
 #include "example_headers/my_header1.cuh"
 #include "example_headers/my_header2.cuh"
 #include "example_headers/my_header3.cuh"
+
+template <typename T>
+__device__ T pointless_func(T x);
 
 __global__ void my_kernel1(const float* indata, float* outdata) {
   outdata[0] = indata[0] + 1;

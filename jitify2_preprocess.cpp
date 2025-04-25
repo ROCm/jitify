@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2017-2020, NVIDIA CORPORATION. All rights reserved.
+ * Modifications Copyright (c) 2024 Advanced Micro Devices, Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,7 +28,7 @@
  */
 
 /*
-  jitify2_preprocess is a tool to preprocess CUDA source files with Jitify and
+  jitify2_preprocess is a tool to preprocess HIP source files with Jitify and
     generate serialized Jitify PreprocessedProgram objects that include all
     header dependencies. These serialized programs can then be shipped with a
     Jitify application and loaded efficiently at runtime ready for compilation.
@@ -86,7 +87,7 @@ void write_serialized_headers_as_cpp_source(std::istream& istream,
                                             const std::string& varname) {
   ostream << "#define JITIFY_SERIALIZATION_ONLY\n#include <jitify2.hpp>\n";
   std::string vs = varname + "_serialized";
-  auto ind = [](int n) { return std::string(2 * n, ' '); };
+  auto ind = [](int n) { return std::string(2 * (size_t) n, ' '); };
   ostream << "static ";
   write_binary_as_c_array(vs, istream, ostream);
   ostream << "const jitify2::StringMap* " << varname << " = [] {\n"
@@ -121,7 +122,7 @@ bool read_file(const std::string& fullpath, std::string* content) {
   std::streamsize size = file.tellg();
   file.seekg(0, std::ios::beg);
   content->resize(size);
-  file.read(&(*content)[0], size);
+  file.read(&(*content)[0], (size_t) size);
   return true;
 }
 
@@ -152,7 +153,7 @@ jitify2_preprocess \
   [-v / --verbose]                    Print header locations.
   [-h / --help]                       Show this help.
 
-jitify2_preprocess is a tool to preprocess CUDA source files with jitify and
+jitify2_preprocess is a tool to preprocess HIP source files with jitify and
 generate serialized jitify PreprocessedProgram objects that include all header
 dependencies. These serialized programs can then be shipped with a jitify
 application and loaded efficiently at runtime ready for compilation.
@@ -200,6 +201,7 @@ int main(int argc, char* argv[]) {
       } else if (arg == "-s" || arg == "--shared-headers") {
         arg_c = *++argv;
         if (!arg_c) {
+          
           std::cerr << "Expected filename after -s" << std::endl;
           return EXIT_FAILURE;
         }
