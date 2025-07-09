@@ -26,8 +26,8 @@
 #include <hip/hiprtc.h>
 
 #define CUDART_VERSION 0
+#define CUDA_VERSION 0
 
-// types
 #ifndef nvrtcProgram
 #define nvrtcProgram hiprtcProgram
 #endif
@@ -40,8 +40,6 @@
 #ifndef cudaSuccess
 #  define cudaSuccess hipSuccess
 #endif
-
-// macros
 #ifndef NVRTC_SUCCESS
 #define NVRTC_SUCCESS HIPRTC_SUCCESS
 #endif
@@ -57,7 +55,6 @@
 #ifndef CUdevice
 #  define CUdevice hipDevice_t
 #endif
-
 #ifndef CUcontext
 #  define CUcontext hipCtx_t
 #endif
@@ -67,9 +64,6 @@
 #ifndef CUfunction
 #  define CUfunction hipFunction_t
 #endif
-
-
-// functions
 #ifndef nvrtcCreateProgram
 #  define nvrtcCreateProgram hiprtcCreateProgram
 #endif
@@ -91,16 +85,12 @@
 #ifndef nvrtcGetNVVMSize
 #  define nvrtcGetNVVMSize hiprtcGetBitcodeSize
 #endif
-//// Following macros are only valid for jitify
-
 #ifndef nvrtcGetBitcode
 #  define nvrtcGetBitcode hiprtcGetBitcode
 #endif
 #ifndef nvrtcGetBitcodeSize
 #  define nvrtcGetBitcodeSize hiprtcGetBitcodeSize
 #endif
-
-////
 #ifndef nvrtcGetProgramLog
 #  define nvrtcGetProgramLog hiprtcGetProgramLog
 #endif
@@ -158,231 +148,183 @@
 #ifndef cuDeviCUfunction_attributeceGet
 #  define CUfunction_attribute hipFunction_attribute
 #endif
-//////////////
-
 #ifndef CUoccupancyB2DSize
 #  define CUoccupancyB2DSize void*
 #endif
-
 #ifndef CUstream
 #  define CUstream hipStream_t
 #endif
-
 #ifndef CUjitInputType
 #  define CUjitInputType hiprtcJITInputType
 #endif
-
 #ifndef CU_JIT_INPUT_NVVM
 #  define CU_JIT_INPUT_NVVM HIPRTC_JIT_INPUT_LLVM_BITCODE
 #endif
-
 #ifndef CU_JIT_INPUT_PTX
-#  define CU_JIT_INPUT_PTX HIPRTC_JIT_INPUT_PTX
+#  define CU_JIT_INPUT_PTX HIPRTC_JIT_INPUT_CUBIN
 #endif
-
 #ifndef CU_JIT_INPUT_CUBIN
 #  define CU_JIT_INPUT_CUBIN HIPRTC_JIT_INPUT_OBJECT
 #endif
-
 #ifndef CU_JIT_INPUT_FATBINARY
 #  define CU_JIT_INPUT_FATBINARY HIPRTC_JIT_INPUT_FATBINARY
 #endif
-
 #ifndef CU_JIT_INPUT_OBJECT
 #  define CU_JIT_INPUT_OBJECT HIPRTC_JIT_INPUT_OBJECT
 #endif
-
 #ifndef CU_JIT_INPUT_LIBRARY
 #  define CU_JIT_INPUT_LIBRARY HIPRTC_JIT_INPUT_LIBRARY
 #endif
-
 #ifndef CU_JIT_INFO_LOG_BUFFER
 #  define CU_JIT_INFO_LOG_BUFFER HIPRTC_JIT_INFO_LOG_BUFFER
 #endif
-
 #ifndef CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES
 #  define CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES HIPRTC_JIT_INFO_LOG_BUFFER_SIZE_BYTES
 #endif
-
 #ifndef CU_JIT_ERROR_LOG_BUFFER
 #  define CU_JIT_ERROR_LOG_BUFFER HIPRTC_JIT_ERROR_LOG_BUFFER
 #endif
-
 #ifndef CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES
 #  define CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES HIPRTC_JIT_ERROR_LOG_BUFFER_SIZE_BYTES
 #endif
-
 #ifndef CUDA_ERROR_FILE_NOT_FOUND
-#  define CUDA_ERROR_FILE_NOT_FOUND hipErrorFileNotFound
+#  define CUDA_ERROR_FILE_NOT_FOUND (hipError_t)HIPRTC_ERROR_PROGRAM_CREATION_FAILURE
 #endif
-
-#ifndef CUDA_VERSION
-#  define CUDA_VERSION 0
-#endif
-
 #ifndef cudaDeviceProp
 #  define cudaDeviceProp hipDeviceProp_t
 #endif
-
-
 #ifndef cudaGetDeviceCount
 #  define cudaGetDeviceCount hipGetDeviceCount
 #endif
-
 #ifndef cuGetDeviceCount
 #  define cuGetDeviceCount hipGetDeviceCount
 #endif
-
 #ifndef nvrtcVersion
 #  define nvrtcVersion hiprtcVersion
 #endif
-
 #ifndef cudaMallocManaged
 #  define cudaMallocManaged hipMallocManaged
 #endif
-
-////
-
 #ifndef cudaFree
 #  define cudaFree hipFree
 #endif
-
 #ifndef cudaMalloc
 #  define cudaMalloc hipMalloc
 #endif
-
 #ifndef cudaMemcpyHostToDevice
 #  define cudaMemcpyHostToDevice hipMemcpyHostToDevice
 #endif
-
 #ifndef cudaMemcpyDeviceToHost
 #  define cudaMemcpyDeviceToHost hipMemcpyDeviceToHost
 #endif
-
 #ifndef cudaGetDevice
 #  define cudaGetDevice hipGetDevice
 #endif
-
 #ifndef cudaDevAttrComputeCapabilityMajor
 #  define cudaDevAttrComputeCapabilityMajor hipDeviceAttributeComputeCapabilityMajor
 #endif
-
 #ifndef cudaDevAttrComputeCapabilityMinor
 #  define cudaDevAttrComputeCapabilityMinor hipDeviceAttributeComputeCapabilityMinor
 #endif
-
 #ifndef cudaMemcpy
 #  define cudaMemcpy hipMemcpy
 #endif
-
 #ifndef cudaDeviceGetAttribute
 #  define cudaDeviceGetAttribute hipDeviceGetAttribute
 #endif
-
 #ifndef cudaDeviceGetAttribute
 #  define cudaDeviceGetAttribute hipDeviceGetAttribute
 #endif
-
 #ifndef CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES
 #  define CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES HIP_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES
 #endif
-
 #ifndef CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN
 #  define CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK_OPTIN hipDeviceAttributeSharedMemPerBlockOptin
 #endif
-
 #ifndef CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES
 #  define CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES HIP_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES
 #endif
-
 #ifndef CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES
 #  define CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES HIP_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES
 #endif
-
 #ifndef cudaErrorAssert
 #  define cudaErrorAssert hipErrorAssert
 #endif
-
 #ifndef cudaSetDevice
 #  define cudaSetDevice hipSetDevice
 #endif
-
 #ifndef cuCtxGetDevice
 #  define cuCtxGetDevice hipCtxGetDevice
 #endif
-
 #ifndef cuCtxGetCurrent
 #  define cuCtxGetCurrent hipCtxGetCurrent
 #endif
-
 #ifndef cuDeviceGetAttribute
 #  define cuDeviceGetAttribute hipDeviceGetAttribute
 #endif
-
 #ifndef cuGetDeviceProperties
 #  define cuGetDeviceProperties hipGetDeviceProperties
 #endif
-//////////////
 #ifndef nvrtcAddNameExpression
 #  define nvrtcAddNameExpression hiprtcAddNameExpression
 #endif
-
 #ifndef cuLinkCreate
 #  define cuLinkCreate hiprtcLinkCreate
 #endif
-
 #ifndef cuDriverGetVersion
 #  define cuDriverGetVersion hipDriverGetVersion
 #endif
-
 #ifndef cuModuleLoadData
 #  define cuModuleLoadData hipModuleLoadData
 #endif
-
 #ifndef cuGetErrorString
 #  define cuGetErrorString hipGetErrorString
 #endif
-
 #ifndef cuModuleUnload
 #  define cuModuleUnload hipModuleUnload
 #endif
-
 #ifndef cuLinkDestroy
 #  define cuLinkDestroy hiprtcLinkDestroy
 #endif
-
 #ifndef cuLinkAddData
 #  define cuLinkAddData hiprtcLinkAddData
 #endif
-
 #ifndef cuLinkComplete
 #  define cuLinkComplete hiprtcLinkComplete
 #endif
-
 #ifndef cuOccupancyMaxPotentialBlockSizeWithFlags
 #  define cuOccupancyMaxPotentialBlockSizeWithFlags hipModuleOccupancyMaxPotentialBlockSizeWithFlags
 #endif
-
 #ifndef cuModuleGetGlobal
 #  define cuModuleGetGlobal hipModuleGetGlobal
 #endif
-
 #ifndef cuFuncGetAttribute
 #  define cuFuncGetAttribute hipFuncGetAttribute
 #endif
-
 #ifndef cuFuncSetAttribute
 #  define cuFuncSetAttribute hipFuncSetAttribute
 #endif
-
 #ifndef cuMemcpyDtoHAsync
 #  define cuMemcpyDtoHAsync hipMemcpyDtoHAsync
 #endif
-
 #ifndef cuMemcpyHtoDAsync
 #  define cuMemcpyHtoDAsync hipMemcpyHtoDAsync
 #endif
-
 #ifndef cuLinkAddFile
 #  define cuLinkAddFile hiprtcLinkAddFile
+#endif
+#ifndef CU_JIT_GENERATE_DEBUG_INFO
+#  define CU_JIT_GENERATE_DEBUG_INFO HIPRTC_JIT_GENERATE_DEBUG_INFO
+#endif
+#ifndef CU_JIT_GENERATE_LINE_INFO
+#  define CU_JIT_GENERATE_LINE_INFO HIPRTC_JIT_GENERATE_LINE_INFO
+#endif
+#ifndef CU_JIT_TARGET
+#  define CU_JIT_TARGET HIPRTC_JIT_TARGET
+#endif
+#ifndef CU_JIT_OPTIMIZATION_LEVEL
+#  define CU_JIT_OPTIMIZATION_LEVEL HIPRTC_JIT_OPTIMIZATION_LEVEL
+#endif
+#ifndef CU_JIT_LOG_VERBOSE
+#  define CU_JIT_LOG_VERBOSE HIPRTC_JIT_LOG_VERBOSE
 #endif
