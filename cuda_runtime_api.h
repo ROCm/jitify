@@ -137,7 +137,7 @@
 #  define CUdevice_attribute hipDeviceAttribute_t
 #endif
 #ifndef CUjit_option
-#  define CUjit_option hipJitOption
+#  define CUjit_option hiprtcJIT_option
 #endif
 #ifndef CUlinkState
 #  define CUlinkState hiprtcLinkState
@@ -188,7 +188,7 @@
 #  define CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES HIPRTC_JIT_ERROR_LOG_BUFFER_SIZE_BYTES
 #endif
 #ifndef CUDA_ERROR_FILE_NOT_FOUND
-#  define CUDA_ERROR_FILE_NOT_FOUND (hipError_t)HIPRTC_ERROR_PROGRAM_CREATION_FAILURE
+#  define CUDA_ERROR_FILE_NOT_FOUND HIPRTC_ERROR_PROGRAM_CREATION_FAILURE
 #endif
 #ifndef cudaDeviceProp
 #  define cudaDeviceProp hipDeviceProp_t
@@ -268,8 +268,8 @@
 #ifndef nvrtcAddNameExpression
 #  define nvrtcAddNameExpression hiprtcAddNameExpression
 #endif
-#ifndef cuLinkCreate
-#  define cuLinkCreate hiprtcLinkCreate
+#ifndef nvrtcLinkCreate
+#  define nvrtcLinkCreate hiprtcLinkCreate
 #endif
 #ifndef cuDriverGetVersion
 #  define cuDriverGetVersion hipDriverGetVersion
@@ -283,14 +283,14 @@
 #ifndef cuModuleUnload
 #  define cuModuleUnload hipModuleUnload
 #endif
-#ifndef cuLinkDestroy
-#  define cuLinkDestroy hiprtcLinkDestroy
+#ifndef nvrtcLinkDestroy
+#  define nvrtcLinkDestroy hiprtcLinkDestroy
 #endif
-#ifndef cuLinkAddData
-#  define cuLinkAddData hiprtcLinkAddData
+#ifndef nvrtcLinkAddData
+#  define nvrtcLinkAddData hiprtcLinkAddData
 #endif
-#ifndef cuLinkComplete
-#  define cuLinkComplete hiprtcLinkComplete
+#ifndef nvrtcLinkComplete
+#  define nvrtcLinkComplete hiprtcLinkComplete
 #endif
 #ifndef cuOccupancyMaxPotentialBlockSizeWithFlags
 #  define cuOccupancyMaxPotentialBlockSizeWithFlags hipModuleOccupancyMaxPotentialBlockSizeWithFlags
@@ -310,8 +310,8 @@
 #ifndef cuMemcpyHtoDAsync
 #  define cuMemcpyHtoDAsync hipMemcpyHtoDAsync
 #endif
-#ifndef cuLinkAddFile
-#  define cuLinkAddFile hiprtcLinkAddFile
+#ifndef nvrtcLinkAddFile
+#  define nvrtcLinkAddFile hiprtcLinkAddFile
 #endif
 #ifndef CU_JIT_GENERATE_DEBUG_INFO
 #  define CU_JIT_GENERATE_DEBUG_INFO HIPRTC_JIT_GENERATE_DEBUG_INFO

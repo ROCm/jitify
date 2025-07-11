@@ -26,6 +26,28 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+// MIT License
+//
+// Modifications Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 /*! \file jitify2.hpp
  *  \brief The Jitify v2 library header
  */
@@ -58,9 +80,9 @@
 #endif
 
 #else  // not JITIFY_SERIALIZATION_ONLY
-
-#include <cuda.h>
-#include <nvrtc.h>
+#include "cuda_runtime_api.h"
+// #include <cuda.h>
+// #include <nvrtc.h>
 
 // Default to being thread-safe.
 #ifndef JITIFY_THREAD_SAFE
@@ -85,10 +107,10 @@
 #ifndef JITIFY_USE_LIBCUFILT
 #define JITIFY_USE_LIBCUFILT 0  // Use Jitify's builtin demangler by default
 #endif
-
+/* NOTE(HIP): Not supported
 #if CUDA_VERSION >= 11040 && JITIFY_USE_LIBCUFILT
 #include <nv_decode.h>  // For __cu_demangle (requires linking with libcufilt.a)
-#endif
+#endif */
 
 #include <algorithm>
 #include <cctype>
@@ -184,7 +206,7 @@
     CUresult jitify_cuda_ret = call;                      \
     if (jitify_cuda_ret != CUDA_SUCCESS) {                \
       const char* error_c;                                \
-      cuda().GetErrorString()(jitify_cuda_ret, &error_c); \
+      (void)cuda().GetErrorString()(jitify_cuda_ret, &error_c); \
       JITIFY_THROW_OR_RETURN(error_c);                    \
     }                                                     \
   } while (0)
@@ -1125,6 +1147,9 @@ class DynamicLibrary {
 
   std::unique_ptr<std::remove_pointer<handle_type>::type, Deleter> lib_;
   std::string error_;
+  // NOTE(HIPRTC): We need it to recover errors in hipDF (BINARYOP_TEST, TRANSFORM_TEST, STREAM_BINARYOP_TEST)
+  protected:
+  void set_error(std::string e) { error_ = std::move(e); }
 
  public:
   DynamicLibrary() = default;
@@ -1159,8 +1184,8 @@ class DynamicLibrary {
   }
 
   void close() { lib_.reset(); }
-
-  explicit operator bool() const { return static_cast<bool>(lib_); }
+  // NOTE(HIPRTC): We need it to recover errors in hipDF (BINARYOP_TEST, TRANSFORM_TEST, STREAM_BINARYOP_TEST)
+  explicit operator bool() const { return error_.empty(); }
   const std::string& error() const { return error_; }
 
   template <typename ResultType, typename... Args>
@@ -1190,9 +1215,9 @@ class LibCuda
 #if !JITIFY_LINK_CUDA_STATIC
     std::string libname =
 #if defined(_WIN32) || defined(_WIN64)
-        "nvcuda.dll";
+#pragma error "Windows is currently not supported"
 #else
-        "libcuda.so.1";
+    "libamdhip64.so";
 #endif
     this->open(libname.c_str());
 #endif  // !JITIFY_LINK_CUDA_STATIC
@@ -1223,19 +1248,12 @@ class LibCuda
   JITIFY_DEFINE_CUDA_WRAPPER(GetErrorName, CUresult, CUresult, const char**)
   JITIFY_DEFINE_CUDA_WRAPPER(CtxGetCurrent, CUresult, CUcontext*)
   JITIFY_DEFINE_CUDA_WRAPPER(CtxGetDevice, CUresult, CUdevice*)
+  JITIFY_DEFINE_CUDA_WRAPPER(GetDeviceCount, CUresult, int*)
+  JITIFY_DEFINE_CUDA_WRAPPER(GetDeviceProperties, CUresult, cudaDeviceProp*,
+                            int)
   JITIFY_DEFINE_CUDA_WRAPPER(DeviceGet, CUresult, CUdevice*, int)
   JITIFY_DEFINE_CUDA_WRAPPER(DeviceGetAttribute, CUresult, int*,
                              CUdevice_attribute, CUdevice)
-  JITIFY_DEFINE_CUDA_WRAPPER(LinkCreate, CUresult, unsigned int, CUjit_option*,
-                             void**, CUlinkState*)
-  JITIFY_DEFINE_CUDA_WRAPPER(LinkDestroy, CUresult, CUlinkState)
-  JITIFY_DEFINE_CUDA_WRAPPER(LinkAddData, CUresult, CUlinkState, CUjitInputType,
-                             void*, size_t, const char*, unsigned int,
-                             CUjit_option*, void**)
-  JITIFY_DEFINE_CUDA_WRAPPER(LinkAddFile, CUresult, CUlinkState, CUjitInputType,
-                             const char*, unsigned int, CUjit_option*, void**)
-  JITIFY_DEFINE_CUDA_WRAPPER(LinkComplete, CUresult, CUlinkState, void**,
-                             size_t*)
   JITIFY_DEFINE_CUDA_WRAPPER(ModuleLoadData, CUresult, CUmodule*, const void*)
   JITIFY_DEFINE_CUDA_WRAPPER(ModuleUnload, CUresult, CUmodule)
   JITIFY_DEFINE_CUDA_WRAPPER(ModuleGetFunction, CUresult, CUfunction*, CUmodule,
@@ -1266,7 +1284,7 @@ class LibCuda
   int get_version() const {
     static const int version = [this] {
       int result;
-      DriverGetVersion()(&result);
+      (void)DriverGetVersion()(&result);
       return result;
     }();
     return version;
@@ -1282,7 +1300,7 @@ namespace detail {
 
 inline std::string get_cuda_error_string(CUresult ret) {
   const char* error_c;
-  cuda().GetErrorString()(ret, &error_c);
+  (void)cuda().GetErrorString()(ret, &error_c);
   return "CUDA error " + std::to_string(ret) + ": " + error_c;
 }
 
@@ -1292,7 +1310,7 @@ class Kernel;
 
 struct CudaModuleDestructor {
   void operator()(CUmodule module) const {
-    if (module) cuda().ModuleUnload()(module);
+    if (module) (void)cuda().ModuleUnload()(module);
   }
 };
 using UniqueCudaModule =
@@ -1358,7 +1376,8 @@ class LoadedProgramData {
    */
   ErrorMsg get_global_ptr(std::string symbol_name, CUdeviceptr* ptr,
                           size_t* size = nullptr) const {
-    symbol_name = detail::normalize_cuda_symbol_name(symbol_name);
+    // NOTE(HIPRTC): We need to include & in the symbol name.
+    symbol_name = "&" + detail::normalize_cuda_symbol_name(symbol_name);
     auto iter = lowered_name_map().find(symbol_name);
     if (iter != lowered_name_map().end()) {
       symbol_name = iter->second;  // Replace name with lowered name.
@@ -1696,7 +1715,9 @@ inline ConfiguredKernel ConfiguredKernel::configure_1d_max_occupancy(
     return Error("Configure failed: " + detail::get_cuda_error_string(ret));
   }
   if (shared_memory_bytes_callback) {
-    shared_memory_bytes = (unsigned int)shared_memory_bytes_callback(block);
+    typedef unsigned int (*callback_type)(int);
+    shared_memory_bytes =
+        reinterpret_cast<callback_type>(shared_memory_bytes_callback)(block);
   }
   return ConfiguredKernel(std::move(kernel), grid, block, shared_memory_bytes,
                           stream);
@@ -1797,6 +1818,148 @@ class LinkedProgram
                                  const CUjitInputType program_types[],
                                  StringMap lowered_name_map, StringVec options);
 };
+
+class LibNvrtc
+#if !JITIFY_LINK_NVRTC_STATIC
+    : public detail::DynamicLibrary
+#endif
+{
+ public:
+  LibNvrtc() {
+#if !JITIFY_LINK_NVRTC_STATIC
+    int compiled_major = HIP_VERSION_MAJOR;
+    int compiled_minor = HIP_VERSION_MINOR;
+    std::string major_str = std::to_string(compiled_major);
+    // Try to load the major-versioned-only file.
+    std::string libname =
+#if defined(_WIN32) || defined(_WIN64)
+#pragma error "Windows is currently unsupported."
+#else
+        "libhiprtc.so." + major_str;
+#endif
+    if (!this->open(libname.c_str())) {
+#if defined(_WIN32) || defined(_WIN64)
+#pragma error "Windows is currently unsupported."
+#else
+      libname = "libhiprtc.so." + major_str + "." +
+                std::to_string(compiled_minor) + "." +
+                std::to_string(compiled_major * 10000 + compiled_minor * 100);
+#endif
+        if (this->open(libname.c_str())) return;
+      }
+
+#endif  // !JITIFY_LINK_NVRTC_STATIC
+  }
+
+#define JITIFY_CHECK_NVRTC(call)                                      \
+  do {                                                                \
+    nvrtcResult jitify_nvrtc_ret = call;                              \
+    if (jitify_nvrtc_ret != NVRTC_SUCCESS) {                          \
+      if (error) *error = nvrtc().GetErrorString()(jitify_nvrtc_ret); \
+      return false;                                                   \
+    }                                                                 \
+  } while (0)
+
+#define JITIFY_STR_IMPL(x) #x
+#define JITIFY_STR(x) JITIFY_STR_IMPL(x)
+#if JITIFY_LINK_NVRTC_STATIC
+  operator bool() { return true; }
+  const std::string& error() const {
+    static std::string err;
+    return err;
+  }
+#define JITIFY_DEFINE_NVRTC_WRAPPER(name, result_type, ...)       \
+  detail::function_type<result_type, __VA_ARGS__>* name() const { \
+    return &nvrtc##name;                                          \
+  }
+#else  // dynamic linking
+#define JITIFY_DEFINE_NVRTC_WRAPPER(name, result_type, ...)                \
+  detail::SafeFunction<result_type, __VA_ARGS__> name() const {            \
+    static const auto func =                                               \
+        this->function<result_type, __VA_ARGS__>(JITIFY_STR(nvrtc##name)); \
+    return func;                                                           \
+  }
+#endif
+  JITIFY_DEFINE_NVRTC_WRAPPER(AddNameExpression, nvrtcResult, nvrtcProgram,
+                              const char* const)
+  JITIFY_DEFINE_NVRTC_WRAPPER(CompileProgram, nvrtcResult, nvrtcProgram, int,
+                              const char* const*)
+  JITIFY_DEFINE_NVRTC_WRAPPER(CreateProgram, nvrtcResult, nvrtcProgram*,
+                              const char*, const char*, int, const char* const*,
+                              const char* const*)
+  JITIFY_DEFINE_NVRTC_WRAPPER(DestroyProgram, nvrtcResult, nvrtcProgram*)
+  JITIFY_DEFINE_NVRTC_WRAPPER(LinkCreate, nvrtcResult, unsigned int,
+                               CUjit_option*, void**, CUlinkState*)
+  JITIFY_DEFINE_NVRTC_WRAPPER(LinkDestroy, nvrtcResult, CUlinkState)
+  JITIFY_DEFINE_NVRTC_WRAPPER(LinkAddData, nvrtcResult, CUlinkState, CUjitInputType,
+                             void*, size_t, const char*, unsigned int,
+                             CUjit_option*, void**)
+  JITIFY_DEFINE_NVRTC_WRAPPER(LinkAddFile, nvrtcResult, CUlinkState, CUjitInputType,
+                             const char*, unsigned int, CUjit_option*, void**)
+  JITIFY_DEFINE_NVRTC_WRAPPER(LinkComplete, nvrtcResult, CUlinkState, void**,
+                             size_t*)
+  JITIFY_DEFINE_NVRTC_WRAPPER(GetLoweredName, nvrtcResult, nvrtcProgram,
+                              const char* const, const char**)
+#if JITIFY_LINK_NVRTC_STATIC && CUDA_VERSION < 11010
+  detail::function_type<nvrtcResult, nvrtcProgram, char*>* GetCUBIN() {
+    return nullptr;
+  }
+  detail::function_type<nvrtcResult, nvrtcProgram, size_t*>* GetCUBINSize() {
+    return nullptr;
+  }
+#else
+  JITIFY_DEFINE_NVRTC_WRAPPER(GetCUBIN, nvrtcResult, nvrtcProgram, char*)
+  JITIFY_DEFINE_NVRTC_WRAPPER(GetCUBINSize, nvrtcResult, nvrtcProgram, size_t*)
+#endif
+#if JITIFY_LINK_NVRTC_STATIC && CUDA_VERSION < 11020
+  detail::function_type<nvrtcResult, nvrtcProgram, int*>*
+  GetNumSupportedArchs() {
+    return nullptr;
+  }
+  detail::function_type<nvrtcResult, nvrtcProgram, int*>* GetSupportedArchs() {
+    return nullptr;
+  }
+#else
+  JITIFY_DEFINE_NVRTC_WRAPPER(GetNumSupportedArchs, nvrtcResult, int*)
+  JITIFY_DEFINE_NVRTC_WRAPPER(GetSupportedArchs, nvrtcResult, int*)
+#endif
+#if JITIFY_LINK_NVRTC_STATIC && CUDA_VERSION < 11040
+  detail::function_type<nvrtcResult, nvrtcProgram, char*>* GetNVVM() {
+    return nullptr;
+  }
+  detail::function_type<nvrtcResult, nvrtcProgram, size_t*>* GetNVVMSize() {
+    return nullptr;
+  }
+#else
+  JITIFY_DEFINE_NVRTC_WRAPPER(GetNVVM, nvrtcResult, nvrtcProgram, char*)
+  JITIFY_DEFINE_NVRTC_WRAPPER(GetNVVMSize, nvrtcResult, nvrtcProgram, size_t*)
+#endif
+  JITIFY_DEFINE_NVRTC_WRAPPER(GetErrorString, const char*, nvrtcResult)
+  JITIFY_DEFINE_NVRTC_WRAPPER(GetPTX, nvrtcResult, nvrtcProgram, char*)
+  JITIFY_DEFINE_NVRTC_WRAPPER(GetPTXSize, nvrtcResult, nvrtcProgram, size_t*)
+  JITIFY_DEFINE_NVRTC_WRAPPER(GetProgramLog, nvrtcResult, nvrtcProgram, char*)
+  JITIFY_DEFINE_NVRTC_WRAPPER(GetProgramLogSize, nvrtcResult, nvrtcProgram,
+                              size_t*)
+  JITIFY_DEFINE_NVRTC_WRAPPER(Version, nvrtcResult, int*, int*)
+#undef JITIFY_DEFINE_NVRTC_WRAPPER
+#undef JITIFY_STR_IMPL
+#undef JITIFY_STR
+
+  // Returns the runtime NVRTC version the same format as CUDA_VERSION.
+  int get_version() const {
+    static const int version = [this] {
+      int major, minor;
+      Version()(&major, &minor);
+      return major * 1000 + minor * 10;
+    }();
+    return version;
+  }
+};
+
+inline LibNvrtc& nvrtc() {
+  static LibNvrtc lib;
+  return lib;
+}
 
 namespace detail {
 
@@ -1904,10 +2067,9 @@ inline bool endswith(StringRef str, StringRef suffix) {
 // present, the filename is assumed to refer to a library, and the associated
 // suffix (and possibly prefix) is automatically added to the filename.
 inline CUjitInputType get_cuda_jit_input_type(std::string* filename) {
-  if (endswith(*filename, ".ptx")) {
-    return CU_JIT_INPUT_PTX;
-  } else if (endswith(*filename, ".cubin")) {
-    return CU_JIT_INPUT_CUBIN;
+  if (endswith(*filename, ".bc")) {
+    // NOTE(HIPRTC): We use bitcode and nvvm interchageably in this code.
+    return CU_JIT_INPUT_NVVM;
   } else if (endswith(*filename, ".fatbin")) {
     return CU_JIT_INPUT_FATBINARY;
   } else if (endswith(*filename,
@@ -1980,25 +2142,26 @@ inline bool link_programs(size_t num_programs, const std::string* programs[],
     std::string val = !vals.empty() ? vals.back() : "";
     // Note: ptxas actually uses "-g" (lowercase), but we use "-G" to be
     // consistent with NVRTC and NVCC.
-    if (key == "-G" || key == "--device-debug") {
+    if (key == "-g") {
       option_keys.push_back(CU_JIT_GENERATE_DEBUG_INFO);
       option_vals.push_back((void*)(intptr_t)1);
       // HACK: Can't allow -lineinfo due to ambiguity with "-l<lib>".
-    } else if (/*key == "-lineinfo" ||*/ key == "--generate-line-info") {
+    // } else if (/*key == "-lineinfo" ||*/ key == "--generate-line-info") { // NOTE(HIPRTC): Not supported.
       option_keys.push_back(CU_JIT_GENERATE_LINE_INFO);
       option_vals.push_back((void*)(intptr_t)1);
-    } else if (key == "-arch" || key == "--gpu-name") {
-      if (val.substr(0, 3) != "sm_") {
-        if (error) *error = "-arch/--gpu-name value must start with \"sm_\"";
+    } else if (key == "--offload-arch" || key == "--gpu-architecture") {
+      if (val.substr(0, 3) != "gfx") {
+        if (error) *error = "--offload-arch value must start with \"gfx\"";
         return false;
       }
       int arch = std::atoi(val.substr(3).c_str());
       option_keys.push_back(CU_JIT_TARGET);
       option_vals.push_back((void*)(intptr_t)arch);
     } else if (key == "-maxrregcount" || key == "--maxrregcount") {
-      int max_regs = std::atoi(val.c_str());
-      option_keys.push_back(CU_JIT_MAX_REGISTERS);
-      option_vals.push_back((void*)(intptr_t)max_regs);
+      // NOTE(HIPRTC): Not supported.
+      // int max_regs = std::atoi(val.c_str());
+      // option_keys.push_back(CU_JIT_MAX_REGISTERS);
+      // option_vals.push_back((void*)(intptr_t)max_regs);
     } else if (key == "-O" || key == "--opt-level") {
       option_keys.push_back(CU_JIT_OPTIMIZATION_LEVEL);
       int opt_level = std::atoi(val.c_str());
@@ -2069,18 +2232,25 @@ inline bool link_programs(size_t num_programs, const std::string* programs[],
   }
 
   CUlinkState culink_state;
-  JITIFY_CHECK_CULINK(cuda().LinkCreate()((unsigned)option_keys.size(),
+  JITIFY_CHECK_NVRTC(nvrtc().LinkCreate()((unsigned)option_keys.size(),
                                           option_keys.data(),
                                           option_vals.data(), &culink_state));
   struct ScopedCULinkStateDestroyer {
     CUlinkState& culink_state_;
     ScopedCULinkStateDestroyer(CUlinkState& culink_state)
         : culink_state_(culink_state) {}
-    ~ScopedCULinkStateDestroyer() { cuda().LinkDestroy()(culink_state_); }
+    ~ScopedCULinkStateDestroyer() { (void)nvrtc().LinkDestroy()(culink_state_); }
   } culink_state_scope_guard{culink_state};
 
   for (size_t i = 0; i < num_programs; ++i) {
-    JITIFY_CHECK_CULINK(cuda().LinkAddData()(
+    if (!(program_types[i] == HIPRTC_JIT_INPUT_LLVM_BITCODE ||
+          program_types[i] == HIPRTC_JIT_INPUT_LLVM_BUNDLED_BITCODE ||
+          program_types[i] ==
+              HIPRTC_JIT_INPUT_LLVM_ARCHIVES_OF_BUNDLED_BITCODE)) {
+      JITIFY_THROW_OR_TERMINATE(
+          "This input type for linking is not supported in HIPRTC.\n");
+    }
+    JITIFY_CHECK_NVRTC(nvrtc().LinkAddData()(
         culink_state, program_types[i], (void*)programs[i]->data(),
         programs[i]->size(), "jitified_source", 0, 0, 0));
   }
@@ -2089,37 +2259,48 @@ inline bool link_programs(size_t num_programs, const std::string* programs[],
     CUjitInputType jit_input_type;
     if (link_file == ".") {
       // Special case for linking to current executable.
-      link_file = get_current_executable_path();
-      jit_input_type = CU_JIT_INPUT_OBJECT;
+      // NOTE(HIPRTC): Not supported. Issue #12
+      // link_file = get_current_executable_path();
+      // jit_input_type = CU_JIT_INPUT_OBJECT;
+      JITIFY_THROW_OR_TERMINATE(
+          "Linking to current executable is currently not supported with "
+          "HIP.\n");
     } else {
       // Infer based on filename.
       jit_input_type = get_cuda_jit_input_type(&link_file);
+      if (!(jit_input_type == HIPRTC_JIT_INPUT_LLVM_BITCODE ||
+            jit_input_type == HIPRTC_JIT_INPUT_LLVM_BUNDLED_BITCODE ||
+            jit_input_type ==
+                HIPRTC_JIT_INPUT_LLVM_ARCHIVES_OF_BUNDLED_BITCODE)) {
+        throw std::runtime_error(
+            "This input type for linking is not supported in HIPRTC.\n");
+      }
     }
-    CUresult result = cuda().LinkAddFile()(culink_state, jit_input_type,
+    nvrtcResult result = nvrtc().LinkAddFile()(culink_state, jit_input_type,
                                            link_file.c_str(), 0, 0, 0);
     int path_num = 0;
     while (result == CUDA_ERROR_FILE_NOT_FOUND &&
            path_num < (int)link_paths.size()) {
       std::string filename = path_join(link_paths[path_num++], link_file);
-      result = cuda().LinkAddFile()(culink_state, jit_input_type,
+      result = nvrtc().LinkAddFile()(culink_state, jit_input_type,
                                     filename.c_str(), 0, 0, 0);
     }
     if (log) {
       if (result == CUDA_ERROR_FILE_NOT_FOUND) {
         log->append("Linker error: Device library not found: ");
         log->append(link_file);
-      } else if (result != CUDA_SUCCESS) {
+      } else if (result != NVRTC_SUCCESS) {
         log->append("Linker error: Failed to add file: ");
         log->append(link_file);
       }
     }
-    JITIFY_CHECK_CULINK(result);
+    JITIFY_CHECK_NVRTC(result);
   }
 
   size_t cubin_size;
   void* cubin_ptr;
-  JITIFY_CHECK_CULINK(
-      cuda().LinkComplete()(culink_state, &cubin_ptr, &cubin_size));
+  JITIFY_CHECK_NVRTC(
+      nvrtc().LinkComplete()(culink_state, &cubin_ptr, &cubin_size));
   set_log();
   if (linked_cubin) {
     linked_cubin->assign((char*)cubin_ptr, (char*)cubin_ptr + cubin_size);
@@ -2135,7 +2316,7 @@ inline bool link_programs(size_t num_programs, const std::string* programs[],
  */
 class CompiledProgramData
     : public serialization::Serializable<CompiledProgramData> {
-  std::string ptx_;
+  // std::string ptx_; // NOTE(HIP): Not supported.
   std::string cubin_;  // Only available with NVRTC version >= 11.2
   std::string nvvm_;   // Only available with NVRTC version >= 11.4
   // Maps name expressions to lowered symbol names (aka. unmangled to mangled).
@@ -2144,17 +2325,17 @@ class CompiledProgramData
   std::string log_;                     // Compilation log
   StringVec compiler_options_;          // Compiler options that were used.
 
-  JITIFY_DEFINE_SERIALIZABLE_MEMBERS(CompiledProgramData, ptx_, cubin_, nvvm_,
+  JITIFY_DEFINE_SERIALIZABLE_MEMBERS(CompiledProgramData, /*ptx_, */cubin_, nvvm_,
                                      lowered_name_map_,
                                      remaining_linker_options_)
 
  public:
   CompiledProgramData() = default;
-  CompiledProgramData(std::string ptx, std::string cubin = {},
+  CompiledProgramData(/*std::string ptx, */std::string cubin,
                       std::string nvvm = {}, StringMap lowered_name_map = {},
                       StringVec linker_options = {}, std::string log = {},
                       StringVec compiler_options = {})
-      : ptx_(std::move(ptx)),
+      : // ptx_(std::move(ptx)),
         cubin_(std::move(cubin)),
         nvvm_(std::move(nvvm)),
         lowered_name_map_(std::move(lowered_name_map)),
@@ -2163,7 +2344,7 @@ class CompiledProgramData
         compiler_options_(std::move(compiler_options)) {}
 
   /*! Get the PTX source of the compiled program. */
-  const std::string& ptx() const { return ptx_; }
+  const std::string& ptx() const { return cubin_; } // NOTE(HIP): Use cubin instead of ptx as we dont support ptx.
   /*! Get the CUBIN binary of the compiled program.
    * \note The CUBIN is only available here with NVRTC version >= 11.2; older
    * versions will return an empty string. The linked CUBIN is always available
@@ -2256,19 +2437,20 @@ inline LinkedProgram LinkedProgram::link(
   if (!cuda()) return Error(cuda().error());
   for (size_t i = 0; i < num_programs; ++i) {
     const CompiledProgramData& compiled_program = *compiled_programs[i];
-    if (std::min(CUDA_VERSION, cuda().get_version()) < 11040 &&
-        !compiled_program.nvvm().empty()) {
-      return Error("Linking NVVM IR is not supported with CUDA < 11.4");
-    }
+    // NOTE(HIPRTC): Supported.
+    // if (std::min(CUDA_VERSION, cuda().get_version()) < 11040 &&
+    //     !compiled_program.nvvm().empty()) {
+    //   return Error("Linking NVVM IR is not supported with CUDA < 11.4");
+    // }
     const std::string& program = !compiled_program.nvvm().empty()
                                      ? compiled_program.nvvm()
                                      : !compiled_program.cubin().empty()
                                            ? compiled_program.cubin()
                                            : compiled_program.ptx();
     CUjitInputType program_type =
-#if CUDA_VERSION >= 11040 && defined(JITIFY_ENABLE_LTO)
+// #if CUDA_VERSION >= 11040 && defined(JITIFY_ENABLE_LTO) // NOTE(HIPRTC): First check bitcode/nvvm.
         !compiled_program.nvvm().empty() ? CU_JIT_INPUT_NVVM :
-#endif
+// #endif
                                          !compiled_program.cubin().empty()
                                              ? CU_JIT_INPUT_CUBIN
                                              : CU_JIT_INPUT_PTX;
@@ -2315,129 +2497,6 @@ inline LinkedProgram LinkedProgram::link_impl(
                        std::move(log), std::move(options));
 }
 
-class LibNvrtc
-#if !JITIFY_LINK_NVRTC_STATIC
-    : public detail::DynamicLibrary
-#endif
-{
- public:
-  LibNvrtc() {
-#if !JITIFY_LINK_NVRTC_STATIC
-    int compiled_major = CUDA_VERSION / 1000;
-    std::string major_str = std::to_string(compiled_major);
-    // Try to load the major-versioned-only file.
-    std::string libname =
-#if defined(_WIN32) || defined(_WIN64)
-        "nvrtc64_" + major_str + ".dll";
-#else
-        "libnvrtc.so." + major_str;
-#endif
-    if (!this->open(libname.c_str())) {
-      // Fall back to a brute-force search over minor versions.
-      for (int minor = 9; minor >= 0; --minor) {
-#if defined(_WIN32) || defined(_WIN64)
-        // TODO: Why does the filename have _0 on the end (not in docs)?
-        libname = "nvrtc64_" + major_str + std::to_string(minor) + "_0.dll";
-#else
-        libname = "libnvrtc.so." + major_str + "." + std::to_string(minor);
-#endif
-        if (this->open(libname.c_str())) break;
-      }
-    }
-#endif  // !JITIFY_LINK_NVRTC_STATIC
-  }
-
-#define JITIFY_STR_IMPL(x) #x
-#define JITIFY_STR(x) JITIFY_STR_IMPL(x)
-#if JITIFY_LINK_NVRTC_STATIC
-  operator bool() { return true; }
-  const std::string& error() const {
-    static std::string err;
-    return err;
-  }
-#define JITIFY_DEFINE_NVRTC_WRAPPER(name, result_type, ...)       \
-  detail::function_type<result_type, __VA_ARGS__>* name() const { \
-    return &nvrtc##name;                                          \
-  }
-#else  // dynamic linking
-#define JITIFY_DEFINE_NVRTC_WRAPPER(name, result_type, ...)                \
-  detail::SafeFunction<result_type, __VA_ARGS__> name() const {            \
-    static const auto func =                                               \
-        this->function<result_type, __VA_ARGS__>(JITIFY_STR(nvrtc##name)); \
-    return func;                                                           \
-  }
-#endif
-  JITIFY_DEFINE_NVRTC_WRAPPER(AddNameExpression, nvrtcResult, nvrtcProgram,
-                              const char* const)
-  JITIFY_DEFINE_NVRTC_WRAPPER(CompileProgram, nvrtcResult, nvrtcProgram, int,
-                              const char* const*)
-  JITIFY_DEFINE_NVRTC_WRAPPER(CreateProgram, nvrtcResult, nvrtcProgram*,
-                              const char*, const char*, int, const char* const*,
-                              const char* const*)
-  JITIFY_DEFINE_NVRTC_WRAPPER(DestroyProgram, nvrtcResult, nvrtcProgram*)
-  JITIFY_DEFINE_NVRTC_WRAPPER(GetLoweredName, nvrtcResult, nvrtcProgram,
-                              const char* const, const char**)
-#if JITIFY_LINK_NVRTC_STATIC && CUDA_VERSION < 11010
-  detail::function_type<nvrtcResult, nvrtcProgram, char*>* GetCUBIN() {
-    return nullptr;
-  }
-  detail::function_type<nvrtcResult, nvrtcProgram, size_t*>* GetCUBINSize() {
-    return nullptr;
-  }
-#else
-  JITIFY_DEFINE_NVRTC_WRAPPER(GetCUBIN, nvrtcResult, nvrtcProgram, char*)
-  JITIFY_DEFINE_NVRTC_WRAPPER(GetCUBINSize, nvrtcResult, nvrtcProgram, size_t*)
-#endif
-#if JITIFY_LINK_NVRTC_STATIC && CUDA_VERSION < 11020
-  detail::function_type<nvrtcResult, nvrtcProgram, int*>*
-  GetNumSupportedArchs() {
-    return nullptr;
-  }
-  detail::function_type<nvrtcResult, nvrtcProgram, int*>* GetSupportedArchs() {
-    return nullptr;
-  }
-#else
-  JITIFY_DEFINE_NVRTC_WRAPPER(GetNumSupportedArchs, nvrtcResult, int*)
-  JITIFY_DEFINE_NVRTC_WRAPPER(GetSupportedArchs, nvrtcResult, int*)
-#endif
-#if JITIFY_LINK_NVRTC_STATIC && CUDA_VERSION < 11040
-  detail::function_type<nvrtcResult, nvrtcProgram, char*>* GetNVVM() {
-    return nullptr;
-  }
-  detail::function_type<nvrtcResult, nvrtcProgram, size_t*>* GetNVVMSize() {
-    return nullptr;
-  }
-#else
-  JITIFY_DEFINE_NVRTC_WRAPPER(GetNVVM, nvrtcResult, nvrtcProgram, char*)
-  JITIFY_DEFINE_NVRTC_WRAPPER(GetNVVMSize, nvrtcResult, nvrtcProgram, size_t*)
-#endif
-  JITIFY_DEFINE_NVRTC_WRAPPER(GetErrorString, const char*, nvrtcResult)
-  JITIFY_DEFINE_NVRTC_WRAPPER(GetPTX, nvrtcResult, nvrtcProgram, char*)
-  JITIFY_DEFINE_NVRTC_WRAPPER(GetPTXSize, nvrtcResult, nvrtcProgram, size_t*)
-  JITIFY_DEFINE_NVRTC_WRAPPER(GetProgramLog, nvrtcResult, nvrtcProgram, char*)
-  JITIFY_DEFINE_NVRTC_WRAPPER(GetProgramLogSize, nvrtcResult, nvrtcProgram,
-                              size_t*)
-  JITIFY_DEFINE_NVRTC_WRAPPER(Version, nvrtcResult, int*, int*)
-#undef JITIFY_DEFINE_NVRTC_WRAPPER
-#undef JITIFY_STR_IMPL
-#undef JITIFY_STR
-
-  // Returns the runtime NVRTC version the same format as CUDA_VERSION.
-  int get_version() const {
-    static const int version = [this] {
-      int major, minor;
-      Version()(&major, &minor);
-      return major * 1000 + minor * 10;
-    }();
-    return version;
-  }
-};
-
-inline LibNvrtc& nvrtc() {
-  static LibNvrtc lib;
-  return lib;
-}
-
 namespace detail {
 
 // Parses and removes the (first) architecture flag from the given vector of
@@ -2457,8 +2516,8 @@ inline int parse_arch_flag(const StringVec& options, bool* is_virtual,
   for (int i = 0; i < (int)options.size(); ++i) {
     StringRef option = ltrim(options[i]);
     size_t key_end = 0;
-    if (startswith(option, "-arch")) {
-      key_end = std::strlen("-arch");
+    if (startswith(option, "--offload-arch")) {
+      key_end = std::strlen("--offload-arch");
     } else if (startswith(option, "--gpu-architecture")) {
       key_end = std::strlen("--gpu-architecture");
     } else if (startswith(option, "--gpu-name")) {  // ptxas flag name
@@ -2478,14 +2537,11 @@ inline int parse_arch_flag(const StringVec& options, bool* is_virtual,
       }
       value = trim(options[i + 1]);
     }
-    if (startswith(value, "compute_")) {
-      *is_virtual = true;
-      value = value.substr(std::strlen("compute_"));
-    } else if (startswith(value, "sm_")) {
-      *is_virtual = false;
-      value = value.substr(std::strlen("sm_"));
+    if (startswith(value, "gfx")) {
+      value = value.substr(std::strlen("gfx"));
+      *is_virtual = false; // NOTE(HIP): Virtual not supported.
     } else {
-      if (error) *error = "Expected value to begin with 'compute_' or 'sm_'.";
+      if (error) *error = "Expected value to begin with 'gfx'.";
       return 0;
     }
     int result;
@@ -2493,6 +2549,9 @@ inline int parse_arch_flag(const StringVec& options, bool* is_virtual,
       result = -1;
     } else {
       int cc = std::atoi(std::string(value).c_str());
+      // NOTE(HIP): If arch is gfx90a, we need to restore the a.
+      // Later 910 is converted to gfx90a
+      if (cc == 90) cc = 910;
       if (cc == 0) {
         if (error) *error = "Failed to parse a valid architecture number.";
         return 0;
@@ -2509,34 +2568,66 @@ inline int parse_arch_flag(const StringVec& options, bool* is_virtual,
   return 0;  // No architecture option found
 }
 
-// Returns 0 on failure and sets *error if provided. Otherwise returns a compute
-// capability such as 61 for sm_61.
+// Returns 0 on failure and sets *error if provided. Otherwise returns a "compute
+// capability" (for hip, it is the architecture name as int, e.g., 910 for MI200).
 inline int get_current_device_compute_capability(std::string* error = nullptr) {
   CUdevice device;
-  int cc_major, cc_minor;
+  cudaDeviceProp device_prop;
   CUresult ret;
   if (!cuda()) {
     if (error) *error = cuda().error();
     return 0;
   }
   if ((ret = cuda().CtxGetDevice()(&device)) != CUDA_SUCCESS ||
-      (ret = cuda().DeviceGetAttribute()(
-           &cc_major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, device)) !=
-          CUDA_SUCCESS ||
-      (ret = cuda().DeviceGetAttribute()(
-           &cc_minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, device)) !=
-          CUDA_SUCCESS) {
+      (ret = cuda().GetDeviceProperties()(&device_prop, device)) != CUDA_SUCCESS) {
     if (error) *error = get_cuda_error_string(ret);
     return 0;
   }
-  int cc = cc_major * 10 + cc_minor;
-  return cc;
+
+  std::string gcnArchNameSubstr;
+  std::smatch match;
+  std::string gcnArchNameFull(device_prop.gcnArchName);
+
+  const std::regex gfxArchPattern("(gfx[0-9a-fA-F]+)(:[-+:\\w]+)?");
+
+  if (std::regex_search(gcnArchNameFull, match, gfxArchPattern)) {
+    gcnArchNameSubstr = match[1].str(); // Extract the first capture group
+  }
+
+  int arch_num = 910;
+  if(gcnArchNameSubstr == "gfx908") {
+    arch_num = 908;
+  } else if(gcnArchNameSubstr == "gfx90a") {
+    arch_num = 910;
+  } else if(gcnArchNameSubstr == "gfx940") {
+    arch_num = 940;
+  } else if(gcnArchNameSubstr == "gfx941") {
+    arch_num = 941;
+  } else if(gcnArchNameSubstr == "gfx942") {
+    arch_num = 942;
+  } else if(gcnArchNameSubstr == "gfx1100") {
+    arch_num = 1100;
+  } else if(gcnArchNameSubstr == "gfx1101") {
+    arch_num = 1101;
+  } else if(gcnArchNameSubstr == "gfx1200") {
+    arch_num = 1200;
+  } else if(gcnArchNameSubstr == "gfx1201") {
+    arch_num = 1201;
+  } else if(gcnArchNameSubstr == "gfx1030") {
+    arch_num = 1030;
+  } else {
+    if(error) *error = "Could not identify GPU architecture or an unsupported GPU architecture was found.";
+    return 0;
+  }
+  return arch_num;
 }
 
 // Returns 0 on failure and sets *error if provided. Otherwise returns a compute
 // capability that is supported by the current version of NVRTC.
-inline int limit_to_supported_compute_capability(int cc,
-                                                 std::string* error = nullptr) {
+inline int limit_to_supported_compute_capability(int cc) {
+  /* NOTE(HIP): On AMD GPUs, there is no concept of compute capabilities. We simply return the input cc here,
+                leaving the code untouched to simplify merging of upstream changes.
+
   // Note: We limit virtual architectures to the max supported by the current
   // version of NVRTC to avoid errors when using older versions of NVRTC with
   // newer hardware+driver. Forward compatibility of PTX allows this to work.
@@ -2580,7 +2671,7 @@ inline int limit_to_supported_compute_capability(int cc,
         return 0;
     }
     // clang-format on
-  }
+  }*/
   return cc;
 }
 
@@ -2625,7 +2716,16 @@ inline bool process_architecture_flags(StringVec* compiler_options,
   // Remove the parsed arch flag entries; they are replaced below.
   compiler_options->erase(compiler_options->begin() + beg_idx,
                           compiler_options->begin() + end_idx);
+  // NOTE(HIPRTC): We need to remove "--offload-arch=gfx" from compiler flags otherwise
+  // HIPRTC gives error
+  auto dummy_arch_idx = compiler_options->begin();
+  for (auto a : *compiler_options) {
+    if (a == "--offload-arch=gfx.") compiler_options->erase(dummy_arch_idx);
+    dummy_arch_idx++;
+  }
   int real_cc;
+  // Todo(HIP): For consistency with upstream, do not change the return type of
+  // parse_arch_flag instead, add "a" to the arch name whenever it is required.
   if (linker_cc != 0) {
     real_cc = linker_cc;
   } else if (given_cc > 0 && !is_virtual) {
@@ -2634,6 +2734,7 @@ inline bool process_architecture_flags(StringVec* compiler_options,
     real_cc = get_current_device_compute_capability(&error);
     if (!check_error()) return false;
   }
+  /* NOTE(HIPRTC): We detect arch differently.
   int virt_cc;
   if (!given_cc) {
     // No arch flag was given. Detect the real arch and use a supported
@@ -2675,14 +2776,23 @@ inline bool process_architecture_flags(StringVec* compiler_options,
   } else {
     compiler_options->push_back("-arch=sm_" + std::to_string(real_cc));
   }
+  */
+  // NOTE(HIP): hipGetDeviceProperties::device_prop.gcnArch returns 910 for gfx90a
+  std::string real_cc_string;
+  if (real_cc == 910)
+    real_cc_string = "90a";
+  else
+    real_cc_string = std::to_string(real_cc);
+  compiler_options->push_back("--offload-arch=gfx" + real_cc_string);
+
   if (linker_cc == 0) {
-    linker_options->push_back("-arch=sm_" + std::to_string(real_cc));
+    linker_options->push_back("--offload-arch=gfx" + real_cc_string);
   }
   return true;
 }
-
+// NOTE(HIPRTC): we should use c++11. Issue #54.
 inline void add_std_flag_if_not_specified(StringVec* options,
-                                          std::string value = "c++11") {
+                                          std::string value = "c++17") {
   for (const std::string& option : *options) {
     if (option.find("--std") != std::string::npos ||
         option.find("-std") != std::string::npos) {
@@ -2695,6 +2805,14 @@ inline void add_std_flag_if_not_specified(StringVec* options,
   options->push_back("-std=" + value);
 }
 
+inline void add_cwd_include_path(StringVec* options) {
+  // TODO(HIPRTC): maybe use C++17 filesystem API to get cwd in a portable way
+  char cwd[PATH_MAX];
+  getcwd(cwd, sizeof(cwd));
+  options->push_back("-I" + std::string(cwd));
+}
+
+/* NOTE(HIPRTC): Not supported
 inline void add_default_device_flag_if_not_specified(StringVec* options) {
   for (const std::string& option : *options) {
     if (option.find("--device-as-default-execution-space") !=
@@ -2705,6 +2823,7 @@ inline void add_default_device_flag_if_not_specified(StringVec* options) {
   }
   options->push_back("-default-device");
 }
+*/
 
 inline bool pop_flag(StringVec* options, const std::string& short_flag,
                      const std::string& long_flag) {
@@ -2722,6 +2841,7 @@ inline bool pop_flag(StringVec* options, const std::string& short_flag,
 // Demangles nested variable names using the PTX name mangling scheme
 // (which mostly follows the Itanium64 ABI). E.g., _ZN1a3Foo2bcE -> a::Foo::bc.
 inline std::string demangle_ptx_variable_name(const char* mangled_name) {
+/* NOTE(HIP): Not supported
 #if CUDA_VERSION >= 11040 && JITIFY_USE_LIBCUFILT
   size_t bufsize = 0;
   char* buf = nullptr;
@@ -2737,7 +2857,8 @@ inline std::string demangle_ptx_variable_name(const char* mangled_name) {
   default: return "";
   }
     // clang-format on
-#else
+#else 
+*/
   std::stringstream ss;
   const char* c = mangled_name;
   if (*c++ != '_' || *c++ != 'Z') return mangled_name;  // Non-mangled name
@@ -2765,10 +2886,12 @@ inline std::string demangle_ptx_variable_name(const char* mangled_name) {
       // are replaced with the program name (which is embedded in them).
       // (These appear as of CUDA >=11.3).
       int name_len_offset = 10;  // Skip "_INTERNAL_"
+      /* NOTE(HIPRTC): Not supported.
       if (nvrtc().get_version() >= 11050) {
         // Mangling changed slightly in CUDA 11.5.
         name_len_offset += 9;  // Skip 8 hex digits and an underscore
       }
+      */
       char* program_name;
       long program_name_len =
           std::strtol(id.c_str() + name_len_offset, &program_name, 10);
@@ -2785,9 +2908,9 @@ inline std::string demangle_ptx_variable_name(const char* mangled_name) {
     ss << "::";
   }
   return ss.str();
-#endif
+// #endif
 }
-
+/* NOTE(HIPRTC): Not supported.
 // Finds global __constant__ and __device__ variable declarations in ptx,
 // demangles their lowered names, and adds them to *lowered_name_map.
 // Note that this does not support template variables (they will be ignored).
@@ -2813,6 +2936,7 @@ inline void find_lowered_global_variables(StringRef ptx,
     lowered_name_map->emplace(key, entry);
   }
 }
+*/
 
 // Returns false on error.
 // Sets *error on failure if provided.
@@ -2823,7 +2947,7 @@ inline bool compile_program(
     const std::string& name, const std::string& source,
     const StringMap& header_sources, const StringVec& options,
     std::string* error = nullptr, std::string* log = nullptr,
-    std::string* ptx = nullptr, std::string* cubin = nullptr,
+    /*std::string* ptx = nullptr,*/ std::string* cubin = nullptr,
     std::string* nvvm = nullptr, const StringVec& name_expressions = {},
     StringMap* lowered_name_map = nullptr) {
   if (!nvrtc()) {
@@ -2844,22 +2968,14 @@ inline bool compile_program(
   std::vector<const char*> options_c;
   options_c.reserve(options.size());
   for (const std::string& option : options) {
-    if (nvrtc().get_version() < 11010) {
+    // NOTE(HIPRTC): We don't support specifying c++03 explicitly, so remove it.
+    // if (nvrtc().get_version() < 11010) {
       // This NVRTC doesn't support specifying c++03 explicitly, so remove it.
       // TODO: Should also support "-std" and "c++03" as separate entries.
       if (option == "-std=c++03" || option == "--std=c++03") continue;
-    }
+    // }
     options_c.push_back(option.c_str());
   }
-
-#define JITIFY_CHECK_NVRTC(call)                                      \
-  do {                                                                \
-    nvrtcResult jitify_nvrtc_ret = call;                              \
-    if (jitify_nvrtc_ret != NVRTC_SUCCESS) {                          \
-      if (error) *error = nvrtc().GetErrorString()(jitify_nvrtc_ret); \
-      return false;                                                   \
-    }                                                                 \
-  } while (0)
 
   nvrtcProgram nvrtc_program;
   JITIFY_CHECK_NVRTC(nvrtc().CreateProgram()(
@@ -2882,14 +2998,17 @@ inline bool compile_program(
   nvrtcResult ret = nvrtc().CompileProgram()(
       nvrtc_program, (int)options_c.size(), options_c.data());
   if (log) {
-    size_t log_size;
+    size_t log_size = 0;
     JITIFY_CHECK_NVRTC(nvrtc().GetProgramLogSize()(nvrtc_program, &log_size));
     // Note: log_size includes NULL terminator, and std::string is guaranteed to
     // include its own.
-    log->resize(log_size - 1);
-    JITIFY_CHECK_NVRTC(nvrtc().GetProgramLog()(nvrtc_program, &(*log)[0]));
+    if(log_size > 0){
+      log->resize(log_size - 1);
+      JITIFY_CHECK_NVRTC(nvrtc().GetProgramLog()(nvrtc_program, &(*log)[0]));
+    }
   }
   JITIFY_CHECK_NVRTC(ret);
+  /* NOTE(HIPRTC): Not supported.
   if (ptx) {
     size_t ptx_size;
     JITIFY_CHECK_NVRTC(nvrtc().GetPTXSize()(nvrtc_program, &ptx_size));
@@ -2900,7 +3019,7 @@ inline bool compile_program(
       ptx->resize(ptx_size - 1);
       JITIFY_CHECK_NVRTC(nvrtc().GetPTX()(nvrtc_program, &(*ptx)[0]));
     }
-  }
+  */
 
   // Note that direct-to-CUBIN compilation is only supported with NVRTC >= 11.2.
   if (cubin && nvrtc().GetCUBIN()) {
@@ -2912,16 +3031,13 @@ inline bool compile_program(
     }
   }
 
-  // Note that NVVM compilation is only supported with NVRTC >= 11.4.
-  if (nvvm && nvrtc().GetNVVM()) {
-    size_t nvvm_size;
-    JITIFY_CHECK_NVRTC(nvrtc().GetNVVMSize()(nvrtc_program, &nvvm_size));
-    if (nvvm_size) {
-      nvvm->resize(nvvm_size, 'x');
-      JITIFY_CHECK_NVRTC(nvrtc().GetNVVM()(nvrtc_program, &(*nvvm)[0]));
-    }
-  }
-
+  // NOTE(HIP/AMD): We have to populate the map here
+  // *before* compiling the bitcode 
+  // with hiprtcCompileProgram, as this seems to invalidate 
+  // the previously added name expressions.
+  // Essentially, the name expressions could then
+  // no longer be lowered and hiprtc would fail 
+  // with HIPRTC_ERROR_INVALID_NAME_EXPRESSION.
   for (const auto& name_expression : name_expressions) {
     const char* lowered_name_c;
     JITIFY_CHECK_NVRTC(nvrtc().GetLoweredName()(
@@ -2929,12 +3045,36 @@ inline bool compile_program(
     lowered_name_map->emplace(name_expression, lowered_name_c);
   }
 
+  // Note that NVVM compilation is only supported with NVRTC >= 11.4.
+  if (nvvm && nvrtc().GetNVVM()) {
+    // NOTE(HIPRTC): We need to recompile for hiprtc, as LLVM bitcode generation requires flag
+    // -fgpu-rdc
+    options_c.push_back("-fgpu-rdc");
+    nvrtcResult ret = nvrtc().CompileProgram()(
+        nvrtc_program, (int)options_c.size(), options_c.data());
+    size_t nvvm_size;
+    JITIFY_CHECK_NVRTC(nvrtc().GetNVVMSize()(nvrtc_program, &nvvm_size));
+    if (nvvm_size) {
+      nvvm->resize(nvvm_size, 'x');
+      JITIFY_CHECK_NVRTC(nvrtc().GetNVVM()(nvrtc_program, &(*nvvm)[0]));
+    }
+  }
+  /* NOTE(HIPRTC): We do this before in this line: if (nvvm && nvrtc().GetNVVM())
+  for (const auto& name_expression : name_expressions) {
+    const char* lowered_name_c;
+    JITIFY_CHECK_NVRTC(nvrtc().GetLoweredName()(
+      nvrtc_program, name_expression.c_str(), &lowered_name_c));
+      lowered_name_map->emplace(name_expression, lowered_name_c);
+    }
+  */
+  /* NOTE(HIP): HIP does not support ptx
   if (ptx && lowered_name_map) {
     // Automatically add global variables to lowered_name_map. This avoids
     // needing to specify them explicitly in name_expressions. Note that this
     // does not support template variables.
     find_lowered_global_variables(*ptx, lowered_name_map);
   }
+  */
 
 #undef JITIFY_CHECK_NVRTC
   return true;
@@ -3101,14 +3241,16 @@ inline CompiledProgram CompiledProgram::compile(
                                           &error)) {
     return Error("Failed to process architecture flags: " + error);
   }
-  detail::add_std_flag_if_not_specified(&compiler_options, "c++11");
-  detail::add_default_device_flag_if_not_specified(&compiler_options);
-  bool should_remove_unused_globals = detail::pop_flag(
-      &compiler_options, "-remove-unused-globals", "--remove-unused-globals");
+  detail::add_std_flag_if_not_specified(&compiler_options, "c++17"); // NOTE(HIPRTC): we should use c++11. Issue #54.
+  detail::add_cwd_include_path(&compiler_options);
+  // NOTE(HIPRTC): Not supported.
+  // bool should_remove_unused_globals = detail::pop_flag(
+  //   &compiler_options, "-remove-unused-globals", "--remove-unused-globals");
   std::string log, ptx, cubin, nvvm;
   StringMap lowered_name_map;
+  // NOTE(HIP): We dont have ptx in HIP.
   if (!detail::compile_program(name, source, header_sources, compiler_options,
-                               &error, &log, &ptx, &cubin, &nvvm,
+                               &error, &log, /*&ptx,*/ &cubin, &nvvm,
                                name_expressions, &lowered_name_map)) {
     std::string options_str = detail::string_join(
         compiler_options, " ", "Compiler options: \"", "\"\n");
@@ -3123,26 +3265,30 @@ inline CompiledProgram CompiledProgram::compile(
     return Error("Compilation failed: " + error + "\n" + options_str +
                  headers_str + "\n" + log);
   }
+  /* NOTE(HIPRTC): Not supported.
   if (!ptx.empty() && should_remove_unused_globals) {
     detail::ptx_remove_unused_globals(&ptx);  // Ignores errors from this
   }
+  */
 
   // We copy certain compiler options to linker_options so that they are used if
-  // the linker does ptx->cubin compilation prior to linking. This allows users
-  // to specify these options in compiler_options without having to worry about
-  // whether they also need to be passed in linker_options.
+  // the linker does hip->bitcode compilation prior to linking. This allows
+  // users to specify these options in compiler_options without having to worry
+  // about whether they also need to be passed in linker_options.
   detail::copy_compiler_option_for_driver_ptxas(
-      compiler_options, &linker_options, /*has_value = */ false, "-G",
-      "--device-debug");
-  detail::copy_compiler_option_for_driver_ptxas(
-      compiler_options, &linker_options, /*has_value = */ false, "-lineinfo",
-      "--generate-line-info",
-      "--generate-line-info");  // Note that linker doesn't support "-lineinfo"
-  detail::copy_compiler_option_for_driver_ptxas(
-      compiler_options, &linker_options, /*has_value = */ true, "-maxrregcount",
-      "--maxrregcount");
-
-  return CompiledProgram(std::move(ptx), std::move(cubin), std::move(nvvm),
+    compiler_options, &linker_options, /*has_value=*/ false, "-g",
+    "--debug"); //There doesn't seem to be a long option that enables debug information for HIP; 
+                // We use "--debug" as a dummy value for now.
+  // NOTE(HIPRTC): Not supported.
+  // detail::copy_compiler_option_for_driver_ptxas(
+  //   compiler_options, &linker_options, /*has_value = */ false, "-lineinfo",
+  //   "--generate-line-info",
+  //   "--generate-line-info");  // Note that linker doesn't support "-lineinfo"
+  // detail::copy_compiler_option_for_driver_ptxas(
+  //   compiler_options, &linker_options, /*has_value = */ true, "-maxrregcount",
+  //   "--maxrregcount");
+  
+  return CompiledProgram(/*std::move(ptx),*/std::move(cubin), std::move(nvvm),
                          std::move(lowered_name_map), std::move(linker_options),
                          std::move(log), std::move(compiler_options));
 }
@@ -3210,6 +3356,16 @@ class PreprocessedProgramData
    *    output. If false, only the program source is included.
    */
   void serialize(std::ostream& stream, bool include_headers = true) const {
+
+    const char* print_serialized_headers = std::getenv("JITIFY_PREPROCESSING_PRINT_SERIALIZED_HEADERS");
+
+    if (print_serialized_headers) {
+      std::cout<<"Serializing program "<<name_<<" include_headers="<<include_headers<<std::endl;
+      for(auto& header: header_sources_) {
+        std::cout<<"Include header into serialized file (name):"<<header.first<<std::endl;
+      }
+    }
+
     serialization::serialize(
         stream, name_, source_, include_headers ? header_sources_ : StringMap(),
         remaining_compiler_options_, remaining_linker_options_);
@@ -3437,15 +3593,15 @@ JITIFY_DEFINE_C_AND_CXX_HEADERS_EX(math, "#define M_PI 3.14159265358979323846",
                                    "", R"(
 #if __cplusplus >= 201103L
 #define DEFINE_MATH_UNARY_FUNC_WRAPPER(f)                       \
-  inline double f(double x) { return ::f(x); }                  \
-  inline float f##f(float x) { return ::f(x); }                 \
+  __device__ inline double f(double x) { return ::f(x); }                  \
+  __device__ inline float f##f(float x) { return ::f(x); }                 \
   /*inline long double f##l(long double x) { return ::f(x); }*/ \
-  inline float f(float x) { return ::f(x); }                    \
+  __device__  inline float f(float x) { return ::f(x); }                    \
   /*inline long double f(long double x)    { return ::f(x); }*/
 #else
 #define DEFINE_MATH_UNARY_FUNC_WRAPPER(f)       \
-  inline double f(double x) { return ::f(x); }  \
-  inline float f##f(float x) { return ::f(x); } \
+  __device__ inline double f(double x) { return ::f(x); }  \
+  __device__ inline float f##f(float x) { return ::f(x); } \
   /*inline long double f##l(long double x) { return ::f(x); }*/
 #endif
 DEFINE_MATH_UNARY_FUNC_WRAPPER(cos)
@@ -4114,7 +4270,6 @@ struct is_floating_point<long double> : true_type {};
 template<typename T> inline constexpr bool is_floating_point_v = is_floating_point<T>::value;
 #endif  // __cplusplus >= 201703L
 
-
 template <class T>
 struct is_integral : false_type {};
 template <>
@@ -4625,33 +4780,76 @@ static const StringMap& get_jitsafe_headers_map() {
   return jitsafe_headers_map;
 }
 
+// HIP: Find the nth occurances of a given string 'slash' in an input string
+// 'input_str'
+static size_t find_nth(const std::string& input_str, const std::string& slash, size_t nth) {
+  size_t index = 0;
+  size_t ocurrances = 0;
+  while (ocurrances != nth) {
+    index += 1;
+    index = input_str.find(slash, index);
+    if (index == std::string::npos) return -1;
+    ocurrances++;
+  }
+  return index;
+}
+
+inline std::string path_simplify(StringRef path);
+
+// HIP: Find the parent header name, header name, and line number in the program that
+// includes the header.
+// Assume the following logs:
+// Ex 1: /tmp/comgr-7c8598/input/multiple_kernels_program:5:10: fatal error:
+// 'example_headers/my_header4.cuh' file not found
+// Ex 2: In file included from /tmp/comgr-9fb216/input/rolling/jit/kernel.cu:5:
+// In file included from /tmp/comgr-9fb216/include/cudf/utilities/bit.hpp:4:
+// /tmp/comgr-9fb216/include/hip/std/climits:67:10: fatal error: 'detail/__config' file not found
+// We first extract the position
+// of the fourth slash in the error to find the parent header name. We use the fourth
+// because it is constant for all cases.
 inline bool extract_include_info_from_compile_error(const std::string& log,
                                                     std::string* name,
                                                     std::string* parent,
                                                     int* line_num) {
-  static const StringVec pattern = {"could not open source file \"",
-                                    "cannot open source file \""};
+  static const StringVec pattern = {"file not found"};
   for (auto& p : pattern) {
     size_t beg = log.find(p);
-    if (beg != std::string::npos) {
-      beg += p.size();
-      size_t end = log.find("\"", beg);
-      *name = log.substr(beg, end - beg);
+    // Find beginning of line where pattern occurs
+    size_t line_beg = log.rfind('\n', beg) + 1; 
 
-      size_t line_beg = log.rfind("\n", beg);
-      if (line_beg == std::string::npos) {
-        line_beg = 0;
-      } else {
-        line_beg += 1;
+    // Ignore any previous lines
+    std::string log_substr_match = log.substr(line_beg);
+ 
+    if (beg != std::string::npos) {
+      // Extracting parent
+      size_t first_slash = find_nth(log_substr_match, "/", 0UL);
+      size_t colon_after_program = log_substr_match.find(':', first_slash);
+      *parent =
+          log_substr_match.substr(first_slash, colon_after_program);
+  
+      // NOTE(HIP): HIPRTC sometimes reports headers in /tmp/comgr as parent headers -> remove this 
+      std::regex comgr_prefix_regex("/tmp/comgr-([0-9A-Fa-f]{6})/(?:include|input)/(.*)");
+      std::smatch match;
+      if (std::regex_search(*parent, match, comgr_prefix_regex)) {
+        *parent = match[2].str();
       }
 
-      size_t split = log.find("(", line_beg);
-      *parent = log.substr(line_beg, split - line_beg);
-      *line_num = std::atoi(
-          log.substr(split + 1, log.find(")", split + 1) - (split + 1))
-              .c_str());
+      // NOTE(HIP): the parent include extracted from the error log sometimes contains unnecessary ".."
+      // We canonicalize such paths here, e.g. "../a/../b/file" -> "b/file" 
+      *parent = path_simplify(*parent);
 
-      return true;
+      // Extracting line number
+      size_t first_colon = log_substr_match.find(':', colon_after_program + 1);
+      *line_num = std::stoi(log_substr_match.substr(colon_after_program + 1,
+                                       first_colon - colon_after_program - 1));
+
+      // Extracting header name
+      std::regex header_regex("'([^']*)' file not found");
+      if (std::regex_search(log_substr_match, match, header_regex)) {
+        *name = match[1];
+	
+	    return true;
+      }
     }
   }
   return false;
@@ -5156,10 +5354,10 @@ inline PreprocessedProgram PreprocessedProgram::preprocess(
   bool use_system_headers_war =
       !detail::pop_flag(&compiler_options, "-no-system-headers-workaround",
                         "--no-system-headers-workaround");
-#if CUDA_VERSION >= 11000
+// #if CUDA_VERSION >= 11000 // NOTE(HIPRTC): We never want to pre-include system headers.
   // This issue with /usr/include always being searched is fixed in this NVRTC.
   use_system_headers_war = false;
-#endif
+// #endif
   if (use_system_headers_war) {
     // Workaround for /usr/include always being searched by NVRTC.
     for (const std::string& header_name :
@@ -5174,10 +5372,10 @@ inline PreprocessedProgram PreprocessedProgram::preprocess(
     header_sources.emplace(
         "jitify_preinclude.h",
         detail::get_jitsafe_headers_map().at("jitify_preinclude.h"));
-    compiler_options.push_back("-include=jitify_preinclude.h");
+    compiler_options.push_back("-includejitify_preinclude.h");
   }
-  detail::add_std_flag_if_not_specified(&compiler_options, "c++11");
-  detail::add_default_device_flag_if_not_specified(&compiler_options);
+  detail::add_std_flag_if_not_specified(&compiler_options, "c++17");
+  detail::add_cwd_include_path(&compiler_options);
   bool minify = detail::pop_flag(&compiler_options, "-m", "--minify");
   // TODO: This flag is experimental, because the implementation does not
   // support transformations of "namespace std {" (as used for specializations).
@@ -5187,10 +5385,10 @@ inline PreprocessedProgram PreprocessedProgram::preprocess(
       &compiler_options, "-no-replace-pragma-once", "--no-replace-pragma-once");
   bool use_builtin_headers = !detail::pop_flag(
       &compiler_options, "-no-builtin-headers", "--no-builtin-headers");
-
-  // This is re-added to the remaining options below.
-  bool should_remove_unused_globals = detail::pop_flag(
-      &compiler_options, "-remove-unused-globals", "--remove-unused-globals");
+  // NOTE(HIP): Not supported.
+  //   // This is re-added to the remaining options below.
+  // bool should_remove_unused_globals = detail::pop_flag(
+  //     &compiler_options, "-remove-unused-globals", "--remove-unused-globals");
 
   // Patch all given sources.
   source = detail::patch_cuda_source(source, use_cuda_std, replace_pragma_once);
@@ -5234,19 +5432,20 @@ inline PreprocessedProgram PreprocessedProgram::preprocess(
     int cc;
     bool is_virtual;
     explicit operator std::string() const {
-      return std::string("-arch=") + (is_virtual ? "compute_" : "sm_") +
-             std::to_string(cc);
+      return std::string("--offload-arch=gfx") + (cc == 910 ? "90a" : std::to_string(cc));
     }
     bool operator==(const ArchFlag& other) const {
-      return cc == other.cc && is_virtual == other.is_virtual;
+      return cc == other.cc /*&& is_virtual == other.is_virtual*/;
     }
-    size_t hash() const { return detail::fasthash64(cc) ^ (is_virtual * ~0); }
+    size_t hash() const { return detail::fasthash64(cc) /*^ (is_virtual * ~0)*/; }
     struct Hash {
       size_t operator()(const ArchFlag& x) const { return x.hash(); }
     };
   };
   // Extract all architecture flags from compiler_options.
   std::unordered_set<ArchFlag, ArchFlag::Hash> arch_flags;
+  // NOTE(HIP): does not support virtual arch.
+  bool visited = false;
   while (true) {
     std::string error;
     size_t beg_idx, end_idx;
@@ -5260,18 +5459,48 @@ inline PreprocessedProgram PreprocessedProgram::preprocess(
       return Error(
           "Architecture flags passed to preprocess() must be explicit.");
     }
-    if (!given_cc) break;
-    if (!nvrtc().GetCUBIN() && !is_virtual) {
-      // This version of NVRTC does not support direct-to-CUBIN compilation.
-      // Convert real arch flags to virtual arch to avoid error from NVRTC.
-      given_cc =
-          detail::limit_to_supported_compute_capability(given_cc, &error);
-      if (!given_cc) {
-        return Error("Failed to get supported compute capability: " + error);
+    if (!given_cc) {
+      // NOTE(HIP/AMD): HipRTC per default tries to query the current device architecture
+      // if no architecture is specified. Hence, preprocessing may fail in CPU-only environments.
+      // In this situation, we specify sensible default architectures to be used during preprocessing.
+      // They can be overriden with the environment variable JITIFY_DEFAULT_PREPROCESSING_ARCHITECTURES.
+
+      int device_count = 0;
+      cudaError_t cuda_ret = cuda().GetDeviceCount()(&device_count);
+
+      if(device_count>=1) break; //NOTE(HIP/AMD): if a GPU is available, preprocess for the current architecture
+
+      const char* default_archs_env = std::getenv("JITIFY_DEFAULT_PREPROCESSING_ARCHITECTURES");
+
+      if(default_archs_env) {
+        std::string archs = default_archs_env;
+
+        for(auto arch_str : detail::split_string(archs, -1, " ;," )) {
+          if (detail::startswith(arch_str, "gfx")) {
+            arch_str = arch_str.substr(std::strlen("gfx"));
+          } else {
+            return Error("Expected architecture value in JITIFY_DEFAULT_PREPROCESSING_ARCHITECTURES to begin with 'gfx'.\n");
+          }
+
+          int arch_decimal = (arch_str=="90a") ? 910 : std::atoi(arch_str.c_str());
+          arch_flags.insert({arch_decimal, false});
+        }
       }
-      is_virtual = true;
+      else {
+        arch_flags.insert({910, false});
+        arch_flags.insert({942, false});
+      }
+      break;
     }
-    arch_flags.insert({given_cc, is_virtual});
+    if (!visited) {
+      given_cc =
+          detail::limit_to_supported_compute_capability(given_cc);
+      if (!given_cc) {
+        return Error("Failed to get supported compute capability\n");
+      }
+      visited = true;
+      arch_flags.insert({given_cc, false});
+    }
     // Remove the parsed arch flag entries; they are replaced below.
     compiler_options.erase(compiler_options.begin() + beg_idx,
                            compiler_options.begin() + end_idx);
@@ -5288,7 +5517,11 @@ inline PreprocessedProgram PreprocessedProgram::preprocess(
   for (const ArchFlag& arch_flag : arch_flags) {
     if (arch_flag.cc) {
       // Temporarily add this arch flag.
-      compiler_options.push_back(static_cast<std::string>(arch_flag));
+      // NOTE(HIP): Convert 910 to 90a to prevent compiler error
+      if (arch_flag.cc == 910) {
+        compiler_options.push_back("--offload-arch=gfx90a");
+      } else
+        compiler_options.push_back(static_cast<std::string>(arch_flag));
     }
 
     std::string compiler_options_msg = detail::string_join(
@@ -5303,7 +5536,7 @@ inline PreprocessedProgram PreprocessedProgram::preprocess(
               compile_log, &include_name, &include_parent, &line_num)) {
         // There was a non include-related compilation error.
         return Error("Compilation failed: " + compile_error + "\n" +
-                     compiler_options_msg + compile_log);
+                     compiler_options_msg + header_log + compile_log);
       }
 
       bool is_included_with_quotes = false;
@@ -5356,9 +5589,10 @@ inline PreprocessedProgram PreprocessedProgram::preprocess(
         }
         // Log where the header was found.
         header_log += detail::string_join(
-            {"Found #include ", include_name, " from ", include_parent, ":",
-             std::to_string(line_num), " [", include_parent_fullpath, "]",
-             " at:\n  ", header_fullpath, "\n"},
+            {"Found #include ", (is_included_with_quotes ? "\"" : "<"),
+             include_name, (is_included_with_quotes ? "\"" : ">"), " from ",
+             include_parent, ":", std::to_string(line_num), " [",
+             include_parent_fullpath, "]", " at:\n  ", header_fullpath, "\n"},
             "");
       } else {
         // Missing header.
@@ -5371,6 +5605,8 @@ inline PreprocessedProgram PreprocessedProgram::preprocess(
                      ": [jitify] File not found");
       }
     }
+    // NOTE(HIP): We could compile the program, so empty the compile_log
+    compile_log = "";
 
     if (arch_flag.cc) {
       compiler_options.pop_back();  // Remove the temporary arch flag we added
@@ -5379,11 +5615,12 @@ inline PreprocessedProgram PreprocessedProgram::preprocess(
 
   // Remove the program source from header_sources now that processing is done.
   header_sources.erase(name);
-
-  // Re-add the -remove-unused-globals flag if it was provided.
-  if (should_remove_unused_globals) {
-    compiler_options.push_back("-remove-unused-globals");
-  }
+  
+  // NOTE(HIP): Not supported.
+  // // Re-add the -remove-unused-globals flag if it was provided.
+  // if (should_remove_unused_globals) {
+  //   compiler_options.push_back("-remove-unused-globals");
+  // }
 
   return PreprocessedProgram(
       std::move(name), std::move(source), std::move(header_sources),
@@ -5800,6 +6037,9 @@ class LRUFileCache {
         file_suffix_(sanitize_filename(file_suffix)),
         lock_file_name_(path_join(path_, file_prefix_ + "lock")) {}
 
+  // fixme(HIP): this is a workaround for doxygen/sphinx, as the current 
+  // generation of the documentation yields errors for the below code
+#ifndef DOXYGEN_SHOULD_SKIP_THIS
   template <class Construct, class Serialize, class Deserialize>
   std::string get(const std::string& name,
                   typename std::result_of<Construct()>::type* result,
@@ -5862,7 +6102,27 @@ class LRUFileCache {
     }
     return {};
   }
-
+#else
+  // fixme(HIP): need some code here to make doxygen happy
+  template <class Construct, class Serialize, class Deserialize>
+  std::string get(const std::string& name,
+                  typename std::result_of<Construct()>::type* result,
+                  Construct construct, Serialize serialize,
+                  Deserialize deserialize) const {
+    // fixme(HIP): without this piece of code, doxygen will fail and the API docu will be incomplete(?)!
+    if (path_.empty() || max_size_ == 0) {
+      *result = construct();
+    } else {
+      bool is_dir;
+      // Create the cache directory if necessary.
+      if (!path_exists(path_.c_str(), &is_dir)) {
+        if (!make_directories(path_)) {
+          return "Failed to create cache directory \"" + path_ + "\"";
+        }
+      }
+    }
+  }
+#endif
   size_t max_size() const { return max_size_; }
 
   // Changes max_size and deletes files in the cache if necessary.
@@ -6057,33 +6317,39 @@ class KeyWithUInt64 {
 // Default key type for ProgramCache. It represents the arguments passed to the
 // get_program() method.
 class AutoKey {
+  using htype = uint64_t;
   StringVec name_expressions_;
   StringMap extra_header_sources_;
   StringVec extra_compiler_options_;
   StringVec extra_linker_options_;
+  htype hash_extra_bitcode_;
 
  public:
   AutoKey(StringVec name_expressions, StringMap extra_header_sources,
-          StringVec extra_compiler_options, StringVec extra_linker_options)
+          StringVec extra_compiler_options, StringVec extra_linker_options,
+          const std::string* extra_bitcode_ = nullptr)
       : name_expressions_(std::move(name_expressions)),
         extra_header_sources_(std::move(extra_header_sources)),
         extra_compiler_options_(std::move(extra_compiler_options)),
-        extra_linker_options_(std::move(extra_linker_options)) {}
+        extra_linker_options_(std::move(extra_linker_options)) {
+          hash_extra_bitcode_ = extra_bitcode_ ? hash_value<htype>(*extra_bitcode_) : 0;
+        }
 
   bool operator==(const AutoKey& rhs) const {
     return name_expressions_ == rhs.name_expressions_ &&
            extra_header_sources_ == rhs.extra_header_sources_ &&
            extra_compiler_options_ == rhs.extra_compiler_options_ &&
-           extra_linker_options_ == rhs.extra_linker_options_;
+           extra_linker_options_ == rhs.extra_linker_options_ &&
+           hash_extra_bitcode_ == rhs.hash_extra_bitcode_;
   }
 
   size_t hash() const {
-    using htype = uint64_t;
     return hash_combine(
         hash_value<htype>(name_expressions_),
         hash_combine(hash_value<htype>(extra_header_sources_),
                      hash_combine(hash_value<htype>(extra_compiler_options_),
-                                  hash_value<htype>(extra_linker_options_))));
+                                  hash_combine(hash_value<htype>(extra_linker_options_),
+                                                                 hash_extra_bitcode_))));
   }
 
   struct Hash {
@@ -6129,6 +6395,7 @@ class AutoKey {
       }
       key_str += '\0';
     }
+    key_str += key.hash_extra_bitcode_;
     return stream << sha256(key_str);
   }
 };
@@ -6203,7 +6470,8 @@ class ProgramCache {
   LinkedProgram build_linked_program(const StringVec& name_expressions,
                                      const StringMap& extra_header_sources,
                                      StringVec extra_compiler_options,
-                                     StringVec extra_linker_options) const {
+                                     StringVec extra_linker_options,
+                                     const std::string* extra_bitcode = nullptr) const {
     StringMap tmp_all_header_sources;
     const StringMap& all_header_sources =
         merge_header_sources(extra_header_sources, &tmp_all_header_sources);
@@ -6211,11 +6479,28 @@ class ProgramCache {
         merge_compiler_options(extra_compiler_options);
     StringVec all_linker_options = merge_linker_options(extra_linker_options);
 
-    auto compiled = CompiledProgram::compile(
-        preprog_.name(), preprog_.source(), all_header_sources,
-        name_expressions, std::move(all_compiler_options));
-    if (!compiled) return LinkedProgram::Error(compiled.error());
-    return compiled->link(std::move(all_linker_options));
+    if(extra_bitcode) {
+      // need to compile with fgpu-rdc to generate linkable bitcode
+      all_compiler_options.push_back("-fgpu-rdc");
+
+      auto compiled = CompiledProgram::compile(
+      preprog_.name(), preprog_.source(), all_header_sources,
+      name_expressions, std::move(all_compiler_options));
+      if (!compiled) return LinkedProgram::Error(compiled.error());
+
+      // TODO(HIP/AMD): workaround: to satisfy jitify2 APIs, we create a compiled program data object without binary code
+      jitify2::CompiledProgramData extra_bitcode_program = jitify2::CompiledProgramData("", *extra_bitcode, {}, compiled->remaining_linker_options());
+
+      const jitify2::CompiledProgramData* data[] = {&*compiled, &extra_bitcode_program};
+            return jitify2::LinkedProgram::link(2, data, std::move(all_linker_options));
+    }
+    else {
+      auto compiled = CompiledProgram::compile(
+          preprog_.name(), preprog_.source(), all_header_sources,
+          name_expressions, std::move(all_compiler_options));
+      if (!compiled) return LinkedProgram::Error(compiled.error());
+      return compiled->link(std::move(all_linker_options));
+    }
   }
 
  public:
@@ -6274,6 +6559,8 @@ class ProgramCache {
    *    in the preprocessed program, replacing them if names match.
    *  \param extra_compiler_options List of additional compiler options.
    *  \param extra_linker_options List of additional linker options.
+   *  \param extra_bitcode String of additional bitcode that will be linked
+   *    into the LoadedProgram. 
    *  \return A LoadedProgram object that contains either a valid
    *    LoadedProgramData object or an error state.
    *  \see get_kernel
@@ -6282,7 +6569,9 @@ class ProgramCache {
                             const StringVec& name_expressions,
                             const StringMap& extra_header_sources = {},
                             StringVec extra_compiler_options = {},
-                            StringVec extra_linker_options = {}) {
+                            StringVec extra_linker_options = {},
+                            const std::string* extra_bitcode = nullptr
+                            ) {
     // Add the current CUDA context to the key, as modules are context-specific.
     CUcontext context;
     if (!cuda()) return LoadedProgram::Error(cuda().error());
@@ -6325,7 +6614,7 @@ class ProgramCache {
       }
       std::stringstream filename_ss;
       filename_ss.imbue(std::locale::classic());
-      filename_ss << to_filename_(key) << ".sm" << compute_capability << ".v"
+      filename_ss << to_filename_(key) << ".gfx" << compute_capability << ".v"
                   << std::hex << serialization::kSerializationVersion;
       LinkedProgram linked;
       error = file_cache_.get(
@@ -6333,7 +6622,8 @@ class ProgramCache {
           [&] {
             return build_linked_program(name_expressions, extra_header_sources,
                                         extra_compiler_options,
-                                        extra_linker_options);
+                                        extra_linker_options,
+                                        extra_bitcode);
           },
           [&](const LinkedProgram& _linked, std::ostream& ostream) {
             if (_linked) _linked->serialize(ostream);
@@ -6360,10 +6650,12 @@ class ProgramCache {
   LoadedProgram get_program(const StringVec& name_expressions,
                             const StringMap& extra_header_sources = {},
                             StringVec extra_compiler_options = {},
-                            StringVec extra_linker_options = {}) {
+                            StringVec extra_linker_options = {},
+                            const std::string* extra_bitcode = nullptr) {
     return get_program(
         detail::AutoKey(name_expressions, extra_header_sources,
-                        extra_compiler_options, extra_linker_options),
+                        extra_compiler_options, extra_linker_options,
+                        extra_bitcode),
         name_expressions, extra_header_sources,
         std::move(extra_compiler_options), std::move(extra_linker_options));
   }
@@ -6386,6 +6678,7 @@ class ProgramCache {
    *    in the preprocessed program, replacing them if names match.
    *  \param extra_compiler_options List of additional compiler options.
    *  \param extra_linker_options List of additional linker options.
+   *  \param extra_bitcode String of extra bitcode that will be linked with the kernel.
    *  \return A Kernel object that contains either a valid KernelData object or
    *    an error state.
    *  \see get_program
@@ -6394,11 +6687,13 @@ class ProgramCache {
                     StringVec other_name_expressions = {},
                     const StringMap& extra_header_sources = {},
                     StringVec extra_compiler_options = {},
-                    StringVec extra_linker_options = {}) {
+                    StringVec extra_linker_options = {},
+                    const std::string* extra_bitcode = nullptr) {
     other_name_expressions.push_back(name);
     LoadedProgram program = get_program(
         key, other_name_expressions, extra_header_sources,
-        std::move(extra_compiler_options), std::move(extra_linker_options));
+        std::move(extra_compiler_options), std::move(extra_linker_options),
+        extra_bitcode);
     if (!program) return Kernel::Error(program.error());
     return Kernel::get_kernel(std::move(*program), std::move(name));
   }
@@ -6414,13 +6709,16 @@ class ProgramCache {
   Kernel get_kernel(std::string name, StringVec other_name_expressions = {},
                     const StringMap& extra_header_sources = {},
                     StringVec extra_compiler_options = {},
-                    StringVec extra_linker_options = {}) {
+                    StringVec extra_linker_options = {},
+                    const std::string* extra_bitcode = nullptr) {
     other_name_expressions.push_back(name);
     LoadedProgram program = get_program(
         detail::AutoKey(other_name_expressions, extra_header_sources,
-                        extra_compiler_options, extra_linker_options),
+                        extra_compiler_options, extra_linker_options,
+                        extra_bitcode),
         other_name_expressions, extra_header_sources,
-        std::move(extra_compiler_options), std::move(extra_linker_options));
+        std::move(extra_compiler_options), std::move(extra_linker_options),
+        extra_bitcode);
     if (!program) return Kernel::Error(program.error());
     return Kernel::get_kernel(std::move(*program), std::move(name));
   }
