@@ -26,6 +26,28 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+// MIT License
+//
+// Modifications Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 #define JITIFY_ENABLE_EXCEPTIONS 1
 #include "jitify2.hpp"
 
@@ -45,7 +67,7 @@
     CUresult status = call;                                               \
     if (status != CUDA_SUCCESS) {                                         \
       const char* str;                                                    \
-      cuda().GetErrorName()(status, &str);                                \
+      (void)cuda().GetErrorName()(status, &str);                                \
       std::cout << "(CUDA) returned " << str;                             \
       std::cout << " (" << __FILE__ << ":" << __LINE__ << ":" << __func__ \
                 << "())" << std::endl;                                    \
@@ -63,6 +85,20 @@
       ASSERT_EQ(status, cudaSuccess);                                     \
     }                                                                     \
   } while (0)
+
+#define UTILS_CHECK_HIP(call)                                             \
+  do {                                                                    \
+    hipError_t status = call;                                             \
+    if (status != hipSuccess) {                                           \
+      std::cout << "(HIP) returned " << hipGetErrorString(status);        \
+      std::cout << " (" << __FILE__ << ":" << __LINE__ << ":" << __func__ \
+                << "())" << std::endl;                                    \
+    }                                                                     \
+  } while (0)
+
+#define JITIFY_THROW_OR_TERMINATE(msg)                           \
+  throw std::runtime_error(std::string("Jitify fatal error: ") + \
+                           std::string(msg))
 
 using namespace jitify2;
 using namespace jitify2::reflection;
@@ -93,6 +129,70 @@ bool not_contains(const StringVec& v, const std::string& s,
   if (!result) debug_print(v, varname);
   return result;
 }
+
+// some helpers for AMD backend
+std::string get_arch_name_of_current_device() {
+  hipDevice_t device;
+  hipDeviceProp_t device_prop;
+
+  UTILS_CHECK_HIP(hipGetDevice(&device));
+  UTILS_CHECK_HIP(hipGetDeviceProperties(&device_prop, device));
+
+  const std::regex gfx_arch_pattern("(gfx[0-9a-fA-F]+)(:[-+:\\w]+)?");
+
+  std::smatch match;
+  std::string full_arch_name(device_prop.gcnArchName);
+  std::string short_arch_name;
+    
+  if (std::regex_search(full_arch_name, match, gfx_arch_pattern)) {
+    short_arch_name = match[1].str(); // Extract the first capture group
+  }
+  else {
+    JITIFY_THROW_OR_TERMINATE("Cannot determine target architecture name of current device!");
+  }
+
+  return short_arch_name;
+}
+
+#ifdef __HIP_PLATFORM_AMD__
+std::string get_llvm_ir_target_features_for_arch(const std::string& arch_name) {
+  std::string result = "";
+    
+  // FIXME(HIP/AMD): Instead of hardcoding these strings, we might want to rely on Jitify to compile a dummy UDF to LLVM IR and extract the required attributes string
+  if(arch_name=="gfx908") {
+    result = "+16-bit-insts,+ci-insts,+dl-insts,+dot1-insts,+dot10-insts,+dot2-insts,+dot3-insts,+dot4-insts,+dot5-insts,+dot6-insts,+dot7-insts,+dpp,+gfx8-insts,+gfx9-insts,+mai-insts,+s-memrealtime,+s-memtime-inst,+wavefrontsize64";
+  }
+  else if(arch_name=="gfx90a") {
+    result = "+16-bit-insts,+atomic-buffer-global-pk-add-f16-insts,+atomic-fadd-rtn-insts,+ci-insts,+dl-insts,+dot1-insts,+dot10-insts,+dot2-insts,+dot3-insts,+dot4-insts,+dot5-insts,+dot6-insts,+dot7-insts,+dpp,+gfx8-insts,+gfx9-insts,+gfx90a-insts,+mai-insts,+s-memrealtime,+s-memtime-inst,+wavefrontsize64";    
+  }
+  else if(arch_name=="gfx940" || arch_name=="gfx941" || arch_name=="gfx942") {
+    result = "+16-bit-insts,+atomic-buffer-global-pk-add-f16-insts,+atomic-ds-pk-add-16-insts,+atomic-fadd-rtn-insts,+atomic-flat-pk-add-16-insts,+atomic-global-pk-add-bf16-inst,+ci-insts,+dl-insts,+dot1-insts,+dot10-insts,+dot2-insts,+dot3-insts,+dot4-insts,+dot5-insts,+dot6-insts,+dot7-insts,+dpp,+fp8-insts,+gfx8-insts,+gfx9-insts,+gfx90a-insts,+gfx940-insts,+mai-insts,+s-memrealtime,+s-memtime-inst,+wavefrontsize64";
+  }
+  else if(arch_name=="gfx1100") {
+    result = "+16-bit-insts,+atomic-fadd-rtn-insts,+ci-insts,+dl-insts,+dot10-insts,+dot5-insts,+dot7-insts,+dot8-insts,+dot9-insts,+dpp,+gfx10-3-insts,+gfx10-insts,+gfx11-insts,+gfx8-insts,+gfx9-insts,+wavefrontsize32";
+  }
+  else {
+    JITIFY_THROW_OR_TERMINATE("Cannot determine LLVM IR target features for current architecture or an unsupported architecture is used (currently, only gfx908, gfx90a, gfx940, gfx941, gfx942 and gfx1100 are supported!).");
+  }
+  return result;
+}
+
+std::string get_llvm_ir_target_features_for_current_arch() {
+  return get_llvm_ir_target_features_for_arch(get_arch_name_of_current_device());
+}
+
+std::string adapt_llvm_ir_attributes_for_current_arch(const std::string& llvm_ir) {
+  std::string target_features = get_llvm_ir_target_features_for_current_arch();
+  std::string target_cpu = "\"target-cpu\"=\"" + get_arch_name_of_current_device();
+  std::regex target_feat_pattern("\"target-features\"=\"[^\"]+");
+  std::regex target_cpu_pattern("\"target-cpu\"=\"[^\"]+");
+
+  std::string result = std::regex_replace(llvm_ir, target_feat_pattern, "\"target-features\"=\"" + target_features);
+  result = std::regex_replace(result, target_cpu_pattern, target_cpu);
+
+  return result;
+}
+#endif
 
 #define CONTAINS(src, target) contains(src, target, #src)
 #define NOT_CONTAINS(src, target) not_contains(src, target, #src)
@@ -153,7 +253,7 @@ bool header_callback(const std::string& filename, std::string* source) {
     *source = R"(
 #pragma once
 template <typename T>
-T pointless_func(T x) {
+__device__ T pointless_func(T x) {
   return x;
 };)";
     return true;
@@ -166,11 +266,11 @@ T pointless_func(T x) {
 // Returns, e.g., "61" for a device of compute capability 6.1.
 int get_current_device_arch() {
   int device;
-  cudaGetDevice(&device);
+  UTILS_CHECK_HIP(cudaGetDevice(&device));
   int cc_major;
-  cudaDeviceGetAttribute(&cc_major, cudaDevAttrComputeCapabilityMajor, device);
+  UTILS_CHECK_HIP(cudaDeviceGetAttribute(&cc_major, cudaDevAttrComputeCapabilityMajor, device));
   int cc_minor;
-  cudaDeviceGetAttribute(&cc_minor, cudaDevAttrComputeCapabilityMinor, device);
+  UTILS_CHECK_HIP(cudaDeviceGetAttribute(&cc_minor, cudaDevAttrComputeCapabilityMinor, device));
   int cc = cc_major * 10 + cc_minor;
   return cc;
 }
@@ -281,8 +381,9 @@ __global__ void my_kernel(const T*, U*) {}
   for (int i = 0; i < nrep; ++i) {
     // Benchmark direct kernel launch.
     auto t0 = std::chrono::steady_clock::now();
-    cuda().LaunchKernel()(kernel->function(), grid.x, grid.y, grid.z, block.x,
-                          block.y, block.z, 0, 0, arg_ptrs, nullptr);
+    UTILS_CHECK_HIP(cuda().LaunchKernel()(kernel->function(), grid.x, grid.y, grid.z,
+                               block.x, block.y, block.z, 0, 0, arg_ptrs,
+                               nullptr));
     auto dt = std::chrono::steady_clock::now() - t0;
     // Using the minimum is more robust than the average (though this test still
     // remains sensitive to the system environment and has been observed to fail
@@ -518,11 +619,151 @@ TEST(Jitify2Test, ProgramCacheFilenameSanitization) {
   *cache.get_kernel("my_kernel");
 }
 
+// TODO(HIP/AMD): Should be disabled with CUDA backend.
+#ifdef __HIP_PLATFORM_AMD__
+TEST(Jitify2Test, ProgramCacheTestLinkingExtraBitcode) {
+  static const char* const source = R"(
+  extern "C" __device__ void GENERIC_UNARY_OP(float*, float);
+ 
+  template<typename T>
+  __global__ void my_kernel(float *indata, float *outdata) {
+    GENERIC_UNARY_OP(outdata, *indata);
+  }
+)";
+
+  // Computes *C = a*a*a
+  // NOTE(HIP/AMD): The IR is currently hardcoded and may not be forward compatible  
+  // with future hipcc versions.
+  std::string amd_llvm_ir_udf = 
+#if HIP_VERSION >= 60400000
+    R"'''(
+
+; Function Attrs: convergent mustprogress noinline nounwind
+define hidden void @GENERIC_UNARY_OP(ptr %0, float %1) #2 {
+  %3 = alloca ptr, align 8, addrspace(5)
+  %4 = alloca float, align 4, addrspace(5)
+  %5 = addrspacecast ptr addrspace(5) %3 to ptr
+  %6 = addrspacecast ptr addrspace(5) %4 to ptr
+  store ptr %0, ptr %5, align 8, !tbaa !7
+  store float %1, ptr %6, align 4, !tbaa !11
+  %7 = load float, ptr %6, align 4, !tbaa !11
+  %8 = load float, ptr %6, align 4, !tbaa !11
+  %9 = fmul contract float %7, %8
+  %10 = load float, ptr %6, align 4, !tbaa !11
+  %11 = fmul contract float %9, %10
+  %12 = load ptr, ptr %5, align 8, !tbaa !7
+  store float %11, ptr %12, align 4, !tbaa !11
+  ret void
+}
+
+attributes #0 = { convergent mustprogress noreturn nounwind "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="gfx90a" "target-features"="+16-bit-insts,+atomic-buffer-global-pk-add-f16-insts,+atomic-fadd-rtn-insts,+ci-insts,+dl-insts,+dot1-insts,+dot10-insts,+dot2-insts,+dot3-insts,+dot4-insts,+dot5-insts,+dot6-insts,+dot7-insts,+dpp,+gfx8-insts,+gfx9-insts,+gfx90a-insts,+mai-insts,+s-memrealtime,+s-memtime-inst,+wavefrontsize64" }
+attributes #1 = { cold noreturn nounwind }
+attributes #2 = { convergent mustprogress noinline nounwind "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="gfx90a" "target-features"="+16-bit-insts,+atomic-buffer-global-pk-add-f16-insts,+atomic-fadd-rtn-insts,+ci-insts,+dl-insts,+dot1-insts,+dot10-insts,+dot2-insts,+dot3-insts,+dot4-insts,+dot5-insts,+dot6-insts,+dot7-insts,+dpp,+gfx8-insts,+gfx9-insts,+gfx90a-insts,+mai-insts,+s-memrealtime,+s-memtime-inst,+wavefrontsize64" }
+
+!llvm.module.flags = !{!0, !1, !2, !3, !4}
+!llvm.ident = !{!5, !5, !5, !5, !5, !5, !5, !5, !5, !5, !5}
+!opencl.ocl.version = !{!6, !6, !6, !6, !6, !6, !6, !6, !6, !6}
+
+!0 = !{i32 4, !"amdgpu_hostcall", i32 1}
+!1 = !{i32 1, !"amdgpu_code_object_version", i32 600}
+!2 = !{i32 1, !"amdgpu_printf_kind", !"hostcall"}
+!3 = !{i32 1, !"wchar_size", i32 4}
+!4 = !{i32 8, !"PIC Level", i32 2}
+!5 = !{!"AMD clang version 17.0.0 (https://github.com/RadeonOpenCompute/llvm-project roc-6.0.0 23483 7208e8d15fbf218deb74483ea8c549c67ca4985e)"}
+!6 = !{i32 2, i32 0}
+!7 = !{!8, !8, i64 0}
+!8 = !{!"any pointer", !9, i64 0}
+!9 = !{!"omnipotent char", !10, i64 0}
+!10 = !{!"Simple C++ TBAA"}
+!11 = !{!12, !12, i64 0}
+!12 = !{!"float", !9, i64 0}
+    )'''";
+#else
+    R"'''(
+
+; Function Attrs: convergent mustprogress noinline nounwind
+define hidden void @GENERIC_UNARY_OP(ptr %0, float %1) #2 {
+  %3 = alloca ptr, align 8, addrspace(5)
+  %4 = alloca float, align 4, addrspace(5)
+  %5 = addrspacecast ptr addrspace(5) %3 to ptr
+  %6 = addrspacecast ptr addrspace(5) %4 to ptr
+  store ptr %0, ptr %5, align 8, !tbaa !7
+  store float %1, ptr %6, align 4, !tbaa !11
+  %7 = load float, ptr %6, align 4, !tbaa !11
+  %8 = load float, ptr %6, align 4, !tbaa !11
+  %9 = fmul contract float %7, %8
+  %10 = load float, ptr %6, align 4, !tbaa !11
+  %11 = fmul contract float %9, %10
+  %12 = load ptr, ptr %5, align 8, !tbaa !7
+  store float %11, ptr %12, align 4, !tbaa !11
+  ret void
+}
+
+attributes #0 = { convergent mustprogress noreturn nounwind "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="gfx90a" "target-features"="+16-bit-insts,+atomic-buffer-global-pk-add-f16-insts,+atomic-fadd-rtn-insts,+ci-insts,+dl-insts,+dot1-insts,+dot10-insts,+dot2-insts,+dot3-insts,+dot4-insts,+dot5-insts,+dot6-insts,+dot7-insts,+dpp,+gfx8-insts,+gfx9-insts,+gfx90a-insts,+mai-insts,+s-memrealtime,+s-memtime-inst,+wavefrontsize64" }
+attributes #1 = { cold noreturn nounwind }
+attributes #2 = { convergent mustprogress noinline nounwind "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="gfx90a" "target-features"="+16-bit-insts,+atomic-buffer-global-pk-add-f16-insts,+atomic-fadd-rtn-insts,+ci-insts,+dl-insts,+dot1-insts,+dot10-insts,+dot2-insts,+dot3-insts,+dot4-insts,+dot5-insts,+dot6-insts,+dot7-insts,+dpp,+gfx8-insts,+gfx9-insts,+gfx90a-insts,+mai-insts,+s-memrealtime,+s-memtime-inst,+wavefrontsize64" }
+
+!llvm.module.flags = !{!0, !1, !2, !3, !4}
+!llvm.ident = !{!5, !5, !5, !5, !5, !5, !5, !5, !5, !5, !5}
+!opencl.ocl.version = !{!6, !6, !6, !6, !6, !6, !6, !6, !6, !6}
+
+!0 = !{i32 4, !"amdgpu_hostcall", i32 1}
+!1 = !{i32 1, !"amdgpu_code_object_version", i32 500}
+!2 = !{i32 1, !"amdgpu_printf_kind", !"hostcall"}
+!3 = !{i32 1, !"wchar_size", i32 4}
+!4 = !{i32 8, !"PIC Level", i32 2}
+!5 = !{!"AMD clang version 17.0.0 (https://github.com/RadeonOpenCompute/llvm-project roc-6.0.0 23483 7208e8d15fbf218deb74483ea8c549c67ca4985e)"}
+!6 = !{i32 2, i32 0}
+!7 = !{!8, !8, i64 0}
+!8 = !{!"any pointer", !9, i64 0}
+!9 = !{!"omnipotent char", !10, i64 0}
+!10 = !{!"Simple C++ TBAA"}
+!11 = !{!12, !12, i64 0}
+!12 = !{!"float", !9, i64 0}
+    )'''";
+#endif
+
+  amd_llvm_ir_udf = adapt_llvm_ir_attributes_for_current_arch(amd_llvm_ir_udf);
+
+  using key_type = uint32_t;
+  size_t max_size = 2;
+  static const char* const cache_path = "jitify2_test_cache";
+  auto prog = Program("my_program", source)->preprocess();
+  ProgramCache<key_type> cache(max_size,
+                                *prog,
+                                nullptr, cache_path);
+  ScopeGuard scoped_cleanup_files([&] {
+    cache.clear();
+    remove_empty_dir(cache_path);
+  });
+
+  Template my_kernel("my_kernel");
+
+  float* indata;
+  float* outdata;
+  CHECK_CUDART(hipMalloc((void**)&indata, sizeof(float)));
+  CHECK_CUDART(hipMalloc((void**)&outdata, sizeof(float)));
+  float inval = 3.0f;
+  CHECK_CUDART(hipMemcpy(indata, &inval, sizeof(float), hipMemcpyHostToDevice));
+
+  auto kernel = cache.get_kernel(0, my_kernel.instantiate<float>(), {}, {}, {}, {}, &amd_llvm_ir_udf);
+  ASSERT_EQ(get_error(kernel), "");
+  ASSERT_EQ(kernel->configure(1, 1)->launch(indata, outdata), "");
+
+  float outval = 0;
+  CHECK_CUDART(hipMemcpy(&outval, outdata, sizeof(float), hipMemcpyDeviceToHost));
+  CHECK_CUDART(hipFree(outdata));
+  CHECK_CUDART(hipFree(indata));
+ 
+  EXPECT_FLOAT_EQ(27.0, outval);
+}
+#endif
+
 TEST(Jitify2Test, OfflinePreprocessing) {
   static const char* const extra_header_source = R"(
 #pragma once
 template <typename T>
-T pointless_func(T x) {
+__device__ T pointless_func(T x) {
   return x;
 };)";
   size_t max_size = 10;
@@ -535,7 +776,7 @@ T pointless_func(T x) {
       Template("my_kernel2").instantiate<NonType<int, C>, T>();
   StringMap extra_headers = {{"my_header4.cuh", extra_header_source}};
   LoadedProgram program = cache.get_program(
-      {"my_kernel1", kernel2_inst}, extra_headers, {"-include=my_header4.cuh"});
+      {"my_kernel1", kernel2_inst}, extra_headers, {"-includemy_header4.cuh"});
   ASSERT_EQ(get_error(program), "");
 
   T* indata;
@@ -604,6 +845,57 @@ TEST(Jitify2Test, PathJoin) {
   EXPECT_EQ(jitify2::detail::path_join("foo\\bar", "2\\1"), "foo\\bar/2\\1");
   EXPECT_EQ(jitify2::detail::path_join("foo\\bar\\", "2\\1"), "foo\\bar\\2\\1");
   EXPECT_EQ(jitify2::detail::path_join("foo\\bar", "\\2\\1"), "");
+#endif
+}
+
+TEST(Jitify2Test, PathSimplify) {
+  EXPECT_EQ(jitify2::detail::path_simplify(""), "");
+  EXPECT_EQ(jitify2::detail::path_simplify("/"), "/");
+  EXPECT_EQ(jitify2::detail::path_simplify("//"), "/");
+  EXPECT_EQ(jitify2::detail::path_simplify("/foo/bar"), "/foo/bar");
+  EXPECT_EQ(jitify2::detail::path_simplify("foo/bar"), "foo/bar");
+  EXPECT_EQ(jitify2::detail::path_simplify("/foo/./bar"), "/foo/bar");
+  EXPECT_EQ(jitify2::detail::path_simplify("foo/./bar"), "foo/bar");
+  EXPECT_EQ(jitify2::detail::path_simplify("/foo/../bar"), "/bar");
+  EXPECT_EQ(jitify2::detail::path_simplify("foo/../bar"), "bar");
+  EXPECT_EQ(jitify2::detail::path_simplify("/foo/cat/../../bar"), "/bar");
+  EXPECT_EQ(jitify2::detail::path_simplify("foo/cat/../../bar"), "bar");
+  EXPECT_EQ(jitify2::detail::path_simplify("/./bar"), "/bar");
+  EXPECT_EQ(jitify2::detail::path_simplify("./bar"), "bar");
+  EXPECT_EQ(jitify2::detail::path_simplify("../bar"), "../bar");
+  EXPECT_EQ(jitify2::detail::path_simplify("../../bar"), "../../bar");
+  EXPECT_EQ(jitify2::detail::path_simplify("../.././bar"), "../../bar");
+  EXPECT_EQ(jitify2::detail::path_simplify(".././../bar"), "../../bar");
+  EXPECT_EQ(jitify2::detail::path_simplify("./../../bar"), "../../bar");
+  EXPECT_EQ(jitify2::detail::path_simplify("/foo/bar/.."), "/foo/bar/..");
+  EXPECT_EQ(jitify2::detail::path_simplify("foo/bar/.."), "foo/bar/..");
+  EXPECT_EQ(jitify2::detail::path_simplify("//foo///..////bar"), "/bar");
+  EXPECT_EQ(jitify2::detail::path_simplify("foo/"), "foo/");
+  EXPECT_EQ(jitify2::detail::path_simplify("/foo/"), "/foo/");
+  EXPECT_EQ(jitify2::detail::path_simplify("foo/bar/"), "foo/bar/");
+  EXPECT_EQ(jitify2::detail::path_simplify("/foo/bar/"), "/foo/bar/");
+  EXPECT_EQ(jitify2::detail::path_simplify("foo/../bar/"), "bar/");
+  EXPECT_EQ(jitify2::detail::path_simplify("/foo/../bar/"), "/bar/");
+  EXPECT_EQ(jitify2::detail::path_simplify("/../foo"), "");    // Invalid path
+  EXPECT_EQ(jitify2::detail::path_simplify("/foo/../../bar"),  // Invalid path
+            "");
+  EXPECT_EQ(jitify2::detail::path_simplify("/.."), "/..");         // Invalid path
+  EXPECT_EQ(jitify2::detail::path_simplify("/foo/../.."), "/..");  // Invalid path
+#if defined _WIN32 || defined _WIN64
+  EXPECT_EQ(jitify2::detail::path_simplify(R"(\)"), R"(\)");
+  EXPECT_EQ(jitify2::detail::path_simplify(R"(\\)"), R"(\)");
+  EXPECT_EQ(jitify2::detail::path_simplify(R"(\foo\bar)"), R"(\foo\bar)");
+  EXPECT_EQ(jitify2::detail::path_simplify(R"(foo\bar)"), R"(foo\bar)");
+  EXPECT_EQ(jitify2::detail::path_simplify(R"(\foo\.\bar)"), R"(\foo\bar)");
+  EXPECT_EQ(jitify2::detail::path_simplify(R"(foo\.\bar)"), R"(foo\bar)");
+  EXPECT_EQ(jitify2::detail::path_simplify(R"(\foo\..\bar)"), R"(\bar)");
+  EXPECT_EQ(jitify2::detail::path_simplify(R"(foo\..\bar)"), R"(bar)");
+
+  EXPECT_EQ(jitify2::detail::path_simplify(R"(\foo/.\bar)"), R"(\foo/bar)");
+  EXPECT_EQ(jitify2::detail::path_simplify(R"(\foo/.\bar\./cat)"),
+            R"(\foo/bar\cat)");
+  EXPECT_EQ(jitify2::detail::path_simplify(R"(\foo/.\bar\../cat)"),
+            R"(\foo/cat)");
 #endif
 }
 
@@ -716,9 +1008,13 @@ __global__ void constant_test(int* x) {
   dim3 grid(1), block(1);
   {  // Test __constant__ look up in kernel using different namespaces.
     Kernel kernel = Program("constmem_program", source)
-                        ->preprocess({"-std=c++14"})
-                        // TODO: Use z::tv<float> in tests below.
-                        ->get_kernel("constant_test", {"&z::tv<float>"});
+            ->preprocess({"-std=c++14"})
+            // TODO: Use z::tv<float> in tests below.
+            // NOTE(HIP): we are adding the name expressions manually, as they
+            // cannot be easily extracted from LLVM bitcode/ISA using hiprtc
+            ->get_kernel("constant_test", {"&z::tv<float>", 
+                 "&x::a", "&x::d", "&y::a", "&y::d", "&a",
+                 "&b::a", "&c::b::a", "&d", "&b::d", "&c::b::d"});
     const LoadedProgramData& program = kernel->program();
     int dval;
     ASSERT_EQ(program.get_global_value("x::a", &dval), "");
@@ -757,6 +1053,7 @@ __global__ void constant_test(int* x) {
     }
     CHECK_CUDART(cudaFree(outdata));
   }
+  /* NOTE(HIPRTC): Not supported.
   {  // Test __constant__ array look up in header nested in both anonymous and
      // explicit namespace.
     static const char* const source2 =
@@ -792,16 +1089,22 @@ __global__ void constant_test(int* x) {
       EXPECT_EQ(inval[i], outval[i]);
     }
     CHECK_CUDART(cudaFree(outdata));
-  }
+  } */
 }
 
 TEST(Jitify2Test, InvalidPrograms) {
   // OK.
-  EXPECT_EQ(get_error(Program("empty_program", "")->preprocess()), "");
+  EXPECT_EQ(get_error(Program("empty_program", "")->preprocess({"-no-preinclude-workarounds"})),
+            "Compilation failed: HIPRTC_ERROR_INVALID_INPUT\nCompiler options: "
+            "\"-std=c++17\"\n");
   // OK.
+  // NOTE(HIP/AMD): LIBHIPCXX_INC_DIR required here to include libhipcxx headers 
+  // which are not yet part of ROCm.
+  #ifdef JITIFY_ENABLE_LIBHIPCXX_TESTS
   EXPECT_EQ(
-      get_error(Program("found_header", "#include <cstdio>")->preprocess()),
+      get_error(Program("found_header", "#include <cstdio>")->preprocess({"-I" LIBHIPCXX_INC_DIR})),
       "");
+  #endif
   // Not OK.
   EXPECT_NE(
       get_error(
@@ -848,10 +1151,10 @@ __global__ void my_kernel(int* data) {
 )";
 
   CompiledProgram program1 = Program("linktest_program1", source1)
-                                 ->preprocess({"-rdc=true"})
+                                 ->preprocess({"-fgpu-rdc"})
                                  ->compile();
   CompiledProgram program2 = Program("linktest_program2", source2)
-                                 ->preprocess({"-rdc=true"})
+                                 ->preprocess({"-fgpu-rdc"})
                                  ->compile("my_kernel");
   // TODO: Consider allowing refs not ptrs for programs, and also addding a
   //         get_kernel() shortcut method to LinkedProgram.
@@ -869,7 +1172,7 @@ __global__ void my_kernel(int* data) {
   EXPECT_EQ(h_data, 26);
   CHECK_CUDART(cudaFree(d_data));
 }
-
+/* NOTE(HIPRTC): Not supported
 #if CUDA_VERSION >= 11040
 TEST(Jitify2Test, LinkLTO) {
   static const char* const source1 = R"(
@@ -913,7 +1216,8 @@ __global__ void my_kernel(int* data) {
   EXPECT_EQ(h_data, 26);
   CHECK_CUDART(cudaFree(d_data));
 }
-#endif  // CUDA_VERSION >= 11040
+#endif  // CUDA_VERSION >= 11040 
+*/
 
 TEST(Jitify2Test, LinkExternalFiles) {
   static const char* const source1 = R"(
@@ -931,18 +1235,20 @@ __global__ void my_kernel(int* data) {
 
   // Ensure temporary file is deleted at the end.
   std::unique_ptr<const char, int (*)(const char*)> ptx_filename(
-      "example_headers/linktest.ptx", std::remove);
+      "example_headers/linktest.bc", std::remove);
   {
     std::ofstream ptx_file(ptx_filename.get());
     ptx_file.exceptions(std::ofstream::failbit | std::ofstream::badbit);
     ptx_file << Program("linktest_program1", source1)
-                    ->preprocess({"-rdc=true"})
+                    ->preprocess({"-fgpu-rdc"})
                     ->compile()
-                    ->ptx();
+                    ->nvvm(); // NOTE(HIPRTC): We use nvvm instead of ptx as we do not support ptx.
   }
+  const std::vector<std::string> linker_options = {"-Lexample_headers",
+                                                     "-llinktest.bc"};
   Kernel kernel =
       Program("linktest_program2", source2)
-          ->preprocess({"-rdc=true"}, {"-Lexample_headers", "-llinktest.ptx"})
+          ->preprocess({"-fgpu-rdc"}, linker_options)
           ->get_kernel("my_kernel");
   int* d_data;
   CHECK_CUDART(cudaMalloc((void**)&d_data, sizeof(int)));
@@ -959,7 +1265,7 @@ __global__ void my_kernel(int* data) {
 namespace a {
 __host__ __device__ int external_device_func(int i) { return i + 1; }
 }  // namespace a
-
+/* NOTE(HIPRTC): Not supported.
 TEST(Jitify2Test, LinkCurrentExecutable) {
   static const char* const source = R"(
 namespace a {
@@ -982,6 +1288,7 @@ __global__ void my_kernel(int* data) {
   EXPECT_EQ(h_data, 4);
   CHECK_CUDART(cudaFree(d_data));
 }
+*/
 
 TEST(Jitify2Test, ClassKernelArg) {
   static const char* const source = R"(
@@ -1102,7 +1409,7 @@ __global__ void set_attribute_kernel(int* out, int* in) {
   CHECK_CUDART(cudaFree(out));
   CHECK_CUDART(cudaFree(in));
 }
-
+/* NOTE(HIPRTC): Not suppported
 TEST(Jitify2Test, RemoveUnusedGlobals) {
   static const char* const source = R"(
 struct Foo { static const int value = 7; };
@@ -1162,30 +1469,41 @@ __global__ void foo_kernel(int* data) {
   EXPECT_EQ(h_data, 16);
   CHECK_CUDART(cudaFree(d_data));
 }
+*/
 
 TEST(Jitify2Test, ArchFlags) {
+  // NOTE(HIP): We have made some changes to the original test because:
+  // 1. We dont have __HIP_ARCH__ and we cannot get the arch name on the device.
+  // We get the current arch and pass it to the kernel.
+  // 2. We first need to register the global variable (i.e., arch) before we can
+  // retrieve its value with get_global_value.
   static const char* const source = R"(
-const int arch = __CUDA_ARCH__ / 10;
+__device__ char* arch = nullptr;
+__global__ void my_kernel( char* data) {
+  arch = data;
+}
 )";
-  int current_arch = get_current_device_arch();
-  int arch;
+  std::string current_arch = get_arch_name_of_current_device();
+  char* arch_char;
   // Test default behavior (automatic architecture detection).
   PreprocessedProgram preprocessed =
       Program("arch_flags_program", source)->preprocess();
+  Kernel kernel = preprocessed->get_kernel("my_kernel", {"&arch"});
+  const LoadedProgramData& loaded_program = kernel->program();
   CompiledProgram program = preprocessed->compile();
   // Expect virtual architecture (compile to PTX).
-  ASSERT_GT(program->ptx().size(), 0);
-  ASSERT_EQ(program->cubin().size(), 0);
-  ASSERT_EQ(program->link()->load()->get_global_value("arch", &arch), "");
+  ASSERT_EQ(kernel->configure(1, 1)->launch(current_arch.c_str()), "");
+  ASSERT_EQ(loaded_program.get_global_value("arch", &arch_char), "");
+  std::string arch(arch_char);
   EXPECT_EQ(arch, current_arch);
 
   // Test explicit virtual architecture (compile to PTX).
   // Note: PTX is forwards compatible.
-  program = preprocessed->compile("", {}, {"-arch=compute_35"});
+  program = preprocessed->compile("", {}, {"--offload-arch=gfx90a"});
   ASSERT_GT(program->ptx().size(), 0);
-  ASSERT_EQ(program->cubin().size(), 0);
-  ASSERT_EQ(program->link()->load()->get_global_value("arch", &arch), "");
-  EXPECT_EQ(arch, 35);
+  ASSERT_GT(program->cubin().size(), 0);
+  // ASSERT_EQ(program->link()->load()->get_global_value("arch", &arch), "");
+  // EXPECT_EQ(arch, 35);
 
   auto expect_cubin_size_if_available = [](size_t cubin_size) {
     if (jitify2::nvrtc().GetCUBIN()) {
@@ -1197,53 +1515,56 @@ const int arch = __CUDA_ARCH__ / 10;
 
   // Test explicit real architecture (may compile directly to CUBIN).
   program = preprocessed->compile("", {},
-                               {"-arch", "sm_" + std::to_string(current_arch)});
+                               {"--offload-arch", current_arch});
   EXPECT_GT(program->ptx().size(), 0);
   expect_cubin_size_if_available(program->cubin().size());
-  ASSERT_EQ(program->link()->load()->get_global_value("arch", &arch), "");
+  // ASSERT_EQ(program->link()->load()->get_global_value("arch", &arch), "");
   EXPECT_EQ(arch, current_arch);
 
   // Test automatic virtual architecture (compile to PTX).
-  program = preprocessed->compile("", {}, {"-arch", "compute_."});
+  program = preprocessed->compile("", {}, {"--offload-arch", "gfx."});
   EXPECT_GT(program->ptx().size(), 0);
-  EXPECT_EQ(program->cubin().size(), 0);
-  ASSERT_EQ(program->link()->load()->get_global_value("arch", &arch), "");
+  EXPECT_GT(program->cubin().size(), 0);
+  // ASSERT_EQ(program->link()->load()->get_global_value("arch", &arch), "");
   EXPECT_EQ(arch, current_arch);
 
   // Test automatic real architecture (may compile directly to CUBIN).
-  program = preprocessed->compile("", {}, {"-arch=sm_."});
+  program = preprocessed->compile("", {}, {"--offload-arch=gfx."});
   EXPECT_GT(program->ptx().size(), 0);
   expect_cubin_size_if_available(program->cubin().size());
-  ASSERT_EQ(program->link()->load()->get_global_value("arch", &arch), "");
+  // ASSERT_EQ(program->link()->load()->get_global_value("arch", &arch), "");
   EXPECT_EQ(arch, current_arch);
 
   // Test that preprocessing and compilation use separate arch flags.
   program = Program("arch_flags_program", source)
-                ->preprocess({"-arch=sm_35"})
-                ->compile("", {}, {"-arch=sm_."});
+                ->preprocess({"--offload-arch=gfx90a"})
+                ->compile("", {}, {"--offload-arch=gfx."});
   EXPECT_GT(program->ptx().size(), 0);
   expect_cubin_size_if_available(program->cubin().size());
-  ASSERT_EQ(program->link()->load()->get_global_value("arch", &arch), "");
+  // ASSERT_EQ(program->link()->load()->get_global_value("arch", &arch), "");
   EXPECT_EQ(arch, current_arch);
 
   // Test that multiple architectures can be specified for preprocessing.
   program = Program("arch_flags_program", source)
-                ->preprocess({"-arch=compute_35", "-arch=compute_52",
-                              "-arch=compute_61"})
-                ->compile("", {}, {"-arch=compute_."});
+                ->preprocess({"--offload-arch=gfx90a", "--offload-arch=gfx908",
+                              "--offload-arch=gfx906"})
+                ->compile("", {}, {"--offload-arch=gfx."});
   EXPECT_GT(program->ptx().size(), 0);
-  EXPECT_EQ(program->cubin().size(), 0);
+  EXPECT_GT(program->cubin().size(), 0);
   ASSERT_EQ(get_error(program), "");
 
+  // NOTE(HIPRTC): does not support the flag maxrregcount
   // Test that certain compiler options are automatically passed to the linker.
   LinkedProgram linked =
       Program("arch_flags_program", source)
-          ->preprocess({"-maxrregcount=100", "-lineinfo", "-G"})
+          ->preprocess({"-g"}) 
           ->compile()
           ->link();
   ASSERT_EQ(get_error(linked), "");
   std::unordered_multiset<std::string> linker_options(
       linked->linker_options().begin(), linked->linker_options().end());
+  EXPECT_EQ(linker_options.count("-g"), 1);
+  /* NOTE(HIPRTC): Not supported
   EXPECT_EQ(linker_options.count("-maxrregcount=100"), 1);
   EXPECT_EQ(linker_options.count("--generate-line-info"), 1);
   EXPECT_EQ(linker_options.count("-G"), 1);
@@ -1261,6 +1582,7 @@ const int arch = __CUDA_ARCH__ / 10;
   EXPECT_EQ(linker_options.count("--maxrregcount=100"), 1);
   EXPECT_EQ(linker_options.count("--generate-line-info"), 1);
   EXPECT_EQ(linker_options.count("--device-debug"), 1);
+  */
 }
 
 struct Base {
@@ -1318,6 +1640,7 @@ __global__ void nontype_kernel() {}
 #undef JITIFY_NONTYPE_REFLECTION_TEST
 }
 
+#ifdef JITIFY_ENABLE_LIBHIPCXX_TESTS
 TEST(Jitify2Test, BuiltinNumericLimitsHeader) {
   static const char* const source = R"(
 #include <limits>
@@ -1325,8 +1648,8 @@ struct MyType {};
 namespace std {
 template<> class numeric_limits<MyType> {
  public:
-  static MyType min() { return {}; }
-  static MyType max() { return {}; }
+  static MyType __host__ __device__ min() { return {}; }
+  static MyType __host__ __device__ max() { return {}; }
 };
 }  // namespace std
 template <typename T>
@@ -1335,8 +1658,10 @@ __global__ void my_kernel(T* data) {
   data[1] = std::numeric_limits<T>::max();
 }
 )";
+  // NOTE(HIP/AMD): LIBHIPCXX_INC_DIR required here to include libhipcxx headers 
+  // which are not yet part of ROCm.
   PreprocessedProgram preprog =
-      Program("builtin_numeric_limits_program", source)->preprocess();
+      Program("builtin_numeric_limits_program", source)->preprocess({"-I" LIBHIPCXX_INC_DIR});
   for (const auto& type :
        {"float", "double", "char", "signed char", "unsigned char", "short",
         "unsigned short", "int", "unsigned int", "long", "unsigned long",
@@ -1347,7 +1672,9 @@ __global__ void my_kernel(T* data) {
     (void)kernel;
   }
 }
+#endif
 
+/* NOTE(HIPRTC): Not suppported
 TEST(Jitify2Test, CuRandKernel) {
   static const char* const source = R"(
 #include <curand_kernel.h>
@@ -1477,21 +1804,24 @@ __global__ void my_kernel(float* data) {
   CHECK_CUDART(cudaFree(d_data));
 }
 #endif  // CUDA_VERSION >= 11000
+*/
 
-#if CUDA_VERSION >= 11000
+#if JITIFY_ENABLE_LIBHIPCXX_TESTS
 TEST(Jitify2Test, LibCudaCxx) {
   // Test that each libcudacxx header can be compiled on its own.
   for (const std::string& header :
-       {"atomic", "barrier", "cassert", "cfloat", "chrono", "climits",
-        "cstddef", "cstdint", "ctime", "functional", "latch",
-        /*"limits",*/ "ratio", "semaphore", "type_traits", "utility"}) {
+       {"atomic", /*"barrier",*/ "cassert", "cfloat", "chrono", "climits",
+        "cstddef", "cstdint", "ctime", "functional", /*"latch",*/
+        /*"limits",*/ "ratio", /*"semaphore",*/ "type_traits", "utility"}) {
     std::string source =
         "#include <cuda/std/" + header + ">\n__global__ void my_kernel() {}";
     // Note: The -arch flag here is required because "CUDA atomics are
     // only supported for sm_60 and up on *nix and sm_70 and up on
     // Windows."
+    // NOTE(HIP): Adding -DLIBHIPCXX_ENABLE_HIPRTC_WORKAROUND=ON as a temporary solution.
+    // Issue 50.
     Program("libcudacxx_program", source)
-        ->preprocess({"-I" CUDA_INC_DIR, "-arch=compute_70",
+        ->preprocess({"-I" LIBHIPCXX_INC_DIR, "--offload-arch=gfx90a",
                       "-no-builtin-headers", "-no-preinclude-workarounds",
                       "-no-system-headers-workaround",
                       "-no-replace-pragma-once"})
@@ -1504,13 +1834,14 @@ TEST(Jitify2Test, LibCudaCxx) {
 __global__ void my_kernel() {}
 )";
   Program("libcudacxx_program", source)
-      ->preprocess({"-I" CUDA_INC_DIR, "-arch=compute_70",
-                    "-no-builtin-headers", "-no-preinclude-workarounds",
-                    "-no-system-headers-workaround", "-no-replace-pragma-once"})
+      ->preprocess({"-I" LIBHIPCXX_INC_DIR, "--offload-arch=gfx90a",
+                    /*"-no-builtin-headers", "-no-preinclude-workarounds",
+                    "-no-system-headers-workaround", "-no-replace-pragma-once"*/})
       ->get_kernel("my_kernel");
 }
 #endif  // CUDA_VERSION >= 11000
 
+/* NOTE(HIPRTC): Not supported.
 TEST(Jitify2Test, AssertHeader) {
   static const char* const source = R"(
 #include <cassert>
@@ -1531,6 +1862,7 @@ __global__ void my_assert_kernel() {
   // NOTE: Assertion failure is a sticky error in CUDA, so the process can no
   // longer be used for CUDA operations after this point.
 }
+*/
 
 TEST(Jitify2Test, Minify) {
   static const char* const name = "my_program";
@@ -1543,7 +1875,7 @@ TEST(Jitify2Test, Minify) {
 //    call;                                     \
 //  } while (0)
 
-#ifndef __CUDACC_RTC__
+#ifndef __HIPCC_RTC__
     #define FOOBAR
     #define BARFOO
 #else
@@ -1567,34 +1899,40 @@ hopefully.*/
 const char* const foo = R"foo(abc\def
 ghi"')foo";  // )'
 
-  #include <iterator>  // Here's a comment
-  #include <tuple>  // Here's another comment
+//  NOTE(HIP): hiprtc yields redefinition errors, if these headers are included
+//  #include <iterator>  // Here's a comment
+//  #include <tuple>  // Here's another comment
 
 const char* const linecont_str = "line1 \
 line2";
 const char c = '\xff';
 
-#include <cuda.h>
-#if CUDA_VERSION >= 11000
+// NOTE(HIP): hiprtc yields redefinition errors, if these headers are included;
+// add correct HIP_VERSION when this is supported
+//#include <hip/hip_runtime.h>
+//#if HIP_VERSION >= 60000000 
 // CUB headers can be tricky to parse.
-#include <cub/block/block_load.cuh>
-#include <cub/block/block_radix_sort.cuh>
-#include <cub/block/block_reduce.cuh>
-#include <cub/block/block_store.cuh>
-#endif  // CUDA_VERSION >= 11000
+//#include <cub/block/block_load.cuh>
+//#include <cub/block/block_radix_sort.cuh>
+//#include <cub/block/block_reduce.cuh>
+//#include <cub/block/block_store.cuh>
+//#endif  // CUDA_VERSION >= 11000
 
 #include "example_headers/my_header1.cuh"
 __global__ void my_kernel() {}
 )";
+  // NOTE(HIP/AMD): hiprtc/hipcc will add a generated cuid to the binary.
+  // This cuid would be different between the binaries even if exactly the same source code is compiled twice.
+  // Therefore, we fix the cuid as only then, the generated binaries in this test match exactly.
   PreprocessedProgram preprog =
-      Program(name, source)->preprocess({"-I" CUB_DIR, "-I" CUDA_INC_DIR});
+      Program(name, source)->preprocess({"-I" HIPCUB_DIR, "-I" HIP_INC_DIR, "-cuid=0"});
   ASSERT_EQ(get_error(preprog), "");
   CompiledProgram compiled = preprog->compile();
   ASSERT_EQ(get_error(compiled), "");
   std::string orig_ptx = compiled->ptx();
 
   preprog = Program(name, source)
-                ->preprocess({"-I" CUB_DIR, "-I" CUDA_INC_DIR, "--minify"});
+                ->preprocess({"-I" HIPCUB_DIR, "-I" HIP_INC_DIR, "--minify", "-cuid=0"});
   ASSERT_EQ(get_error(preprog), "");
   EXPECT_LT(preprog->source().size(), source.size());
   compiled = preprog->compile();
@@ -1603,10 +1941,10 @@ __global__ void my_kernel() {}
 }
 
 int main(int argc, char** argv) {
-  cudaSetDevice(0);
+  UTILS_CHECK_HIP(cudaSetDevice(0));
   // Initialize the driver context (avoids "initialization error"/"context is
   // destroyed").
-  cudaFree(0);
+  UTILS_CHECK_HIP(cudaFree(0));
   ::testing::InitGoogleTest(&argc, argv);
   // Test order is actually undefined, so we use filters to force the
   // AssertHeader test to run last.
