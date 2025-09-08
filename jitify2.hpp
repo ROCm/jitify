@@ -213,6 +213,16 @@
 
 #endif  // not JITIFY_SERIALIZATION_ONLY
 
+// NOTE(AMD/HIP): hiprtc cannot compile with c++11 on ROCm 7.0.0 and 7.0.0. Issue #54.
+#include <rocm-core/rocm_version.h>
+#define ROCM_VERSION (ROCM_VERSION_MAJOR * 10000000 + ROCM_VERSION_MINOR * 100000 + ROCM_VERSION_PATCH)
+
+#if ROCM_VERSION == 70000000 || ROCM_VERSION == 70000001
+#define CPP_VERSION "c++14"
+#else
+#define CPP_VERSION "c++11"
+#endif
+
 namespace jitify2 {
 
 // Convenience aliases.
@@ -2792,7 +2802,7 @@ inline bool process_architecture_flags(StringVec* compiler_options,
 }
 // NOTE(HIPRTC): we should use c++11. Issue #54.
 inline void add_std_flag_if_not_specified(StringVec* options,
-                                          std::string value = "c++11") {
+                                          std::string value = CPP_VERSION) {
   for (const std::string& option : *options) {
     if (option.find("--std") != std::string::npos ||
         option.find("-std") != std::string::npos) {
@@ -3241,7 +3251,7 @@ inline CompiledProgram CompiledProgram::compile(
                                           &error)) {
     return Error("Failed to process architecture flags: " + error);
   }
-  detail::add_std_flag_if_not_specified(&compiler_options, "c++11"); // NOTE(HIPRTC): we should use c++11. Issue #54.
+  detail::add_std_flag_if_not_specified(&compiler_options, CPP_VERSION); // NOTE(HIPRTC): we should use c++11. Issue #54.
   detail::add_cwd_include_path(&compiler_options);
   // NOTE(HIPRTC): Not supported.
   // bool should_remove_unused_globals = detail::pop_flag(
@@ -5374,7 +5384,7 @@ inline PreprocessedProgram PreprocessedProgram::preprocess(
         detail::get_jitsafe_headers_map().at("jitify_preinclude.h"));
     compiler_options.push_back("-includejitify_preinclude.h");
   }
-  detail::add_std_flag_if_not_specified(&compiler_options, "c++11");
+  detail::add_std_flag_if_not_specified(&compiler_options, CPP_VERSION);
   detail::add_cwd_include_path(&compiler_options);
   bool minify = detail::pop_flag(&compiler_options, "-m", "--minify");
   // TODO: This flag is experimental, because the implementation does not
