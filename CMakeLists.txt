@@ -80,7 +80,9 @@ endif()
 if(JITIFY_ENABLE_CUDA_BACKEND)
   project(jitify LANGUAGES CXX CUDA)
 else()
-  project(jitify LANGUAGES CXX HIP)
+  project(jitify LANGUAGES CXX HIP
+  VERSION 0.1.0
+  )
 
 
   if(JITIFY_ENABLE_LIBHIPCXX_TESTS)
