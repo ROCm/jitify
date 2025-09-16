@@ -254,7 +254,7 @@ foreach(test ${TESTS})
     target_compile_definitions(${test} PRIVATE JITIFY_ENABLE_LIBHIPCXX_TESTS)
   endif()
   if(NOT JITIFY_ENABLE_CUDA_BACKEND)
-    # NOTE(HIP): We need to compile jitify2_test.cu with O2 opt level. 
+    # NOTE(HIP): We need to compile jitify2_test.cu with O3 opt level. 
     # Otherwise, launchLatencyBenchmark test fails because kernel launch time exceeds threshold.
     target_compile_options(${test} PRIVATE -O3)
     target_compile_definitions(${test} PRIVATE HIP_INC_DIR="${HIP_INCLUDE_DIR}")
