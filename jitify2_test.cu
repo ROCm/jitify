@@ -1907,9 +1907,11 @@ hopefully.*/
 const char* const foo = R"foo(abc\def
 ghi"')foo";  // )'
 
-//  NOTE(HIP): hiprtc yields redefinition errors, if these headers are included
-//  #include <iterator>  // Here's a comment
-//  #include <tuple>  // Here's another comment
+#include <rocm-core/rocm_version.h>
+#if ROCM_VERSION_MAJOR >= 7
+#include <iterator>
+#include <tuple>
+#endif
 
 const char* const linecont_str = "line1 \
 line2";
