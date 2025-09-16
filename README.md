@@ -27,7 +27,7 @@ This is a port of the original CUDA version at https://github.com/NVIDIA/jitify/
 
 ## Rationale
 
-Integrating NVRTC into existing and/or templated CUDA code can be
+Integrating NVRTC/HIPRTC into existing and/or templated CUDA/HIP code can be
 tricky. Jitify aims to simplify this process by hiding the
 complexities behind a simple, high-level interface.
 
@@ -59,7 +59,7 @@ program.kernel("my_kernel")
 
 Jitify provides/takes care of the following things:
 
- * All NVRTC and CUDA Driver API calls
+ * All NVRTC/HIPRTC and CUDA/HIP Driver API calls
  * Simple kernel instantiation and launch syntax
  * Caching compiled kernels
  * Loading source code from strings, files, or embedded in an executable
@@ -69,14 +69,17 @@ Jitify provides/takes care of the following things:
  * Dealing with kernel name mangling
  * Reflecting kernel template parameters into strings
  * Compiling specifically for the current device's compute capability
- * Linking to pre-compiled PTX/CUBIN/FATBIN/object/library files
- * Support for CUDA versions 7.0, 7.5, 8.0, 9.x, 10.x, on both Linux and Windows
+ * On HIP:
+    * Linking to pre-compiled LLVM IR/Bitcode as file or kernels as string
+ * On CUDA:
+    * Linking to pre-compiled PTX/CUBIN/FATBIN/object/library files
+    * Support for CUDA versions 7.0, 7.5, 8.0, 9.x, 10.x, on both Linux and Windows
  * Convenient parallel_for function and lambda support
  * \*New\* jitify::experimental API provides serialization capabilities to enable [user-managed hashing and caching](https://github.com/rapidsai/cudf/blob/v0.12.0/cpp/src/jit/cache.h)
 
-Things you can do with Jitify and NVRTC:
+Things you can do with Jitify and NVRTC/HIPRTC:
 
- * *Rapidly port existing code* to use CUDA Runtime Compilation
+ * *Rapidly port existing code* to use CUDA/HIP Runtime Compilation
  * *Dramatically reduce code volume* and offline-compilation times
  * *Increase kernel performance* by baking in runtime constants and autotuning
 
@@ -90,6 +93,10 @@ Jitify is just a single header file:
 
 Compile with: `-pthread` (not needed if JITIFY_THREAD_SAFE is defined to 0)
 
+### On HIP
+Link with: `-lhiprtc`
+
+### On CUDA
 Link with: `-lcuda -lcudart -lnvrtc`
 
 A small utility called stringify is included for converting text files into
