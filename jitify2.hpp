@@ -2366,6 +2366,8 @@ class CompiledProgramData
    * "-dlto" compiler option.
    */
   const std::string& nvvm() const { return nvvm_; }
+  // NOTE(HIP/AMD): We added this method only for the test LinkExternalFiles.
+  const std::string& bitcode() const { return nvvm_; }
   /*! Get the map of name expressions to lowered (mangled) symbol names. */
   const StringMap& lowered_name_map() const { return lowered_name_map_; }
   /*! Get the remaining options that will be passed on to the compiler. */
