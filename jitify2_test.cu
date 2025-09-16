@@ -1250,7 +1250,7 @@ __global__ void my_kernel(int* data) {
     ptx_file << Program("linktest_program1", source1)
                     ->preprocess({"-fgpu-rdc"})
                     ->compile()
-                    ->nvvm(); // NOTE(HIPRTC): We use nvvm instead of ptx as we do not support ptx.
+                    ->bitcode(); // NOTE(HIP/AMD): We use bitcode instead of ptx as we do not support ptx.
   }
   const std::vector<std::string> linker_options = {"-Lexample_headers",
                                                      "-llinktest.bc"};
