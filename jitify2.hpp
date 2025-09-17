@@ -213,7 +213,7 @@
 
 #endif  // not JITIFY_SERIALIZATION_ONLY
 
-// NOTE(AMD/HIP): hiprtc cannot compile with c++11 on ROCm 7.0.0 and 7.0.0. Issue #54.
+// NOTE(AMD/HIP): hiprtc cannot compile with c++11 on ROCm 7.0.0 and 7.0.1. Issue #54.
 #include <rocm-core/rocm_version.h>
 #define ROCM_VERSION (ROCM_VERSION_MAJOR * 10000000 + ROCM_VERSION_MINOR * 100000 + ROCM_VERSION_PATCH)
 
@@ -1157,7 +1157,7 @@ class DynamicLibrary {
 
   std::unique_ptr<std::remove_pointer<handle_type>::type, Deleter> lib_;
   std::string error_;
-  // NOTE(HIPRTC): We need it to recover errors in hipDF (BINARYOP_TEST, TRANSFORM_TEST, STREAM_BINARYOP_TEST)
+  // NOTE(HIP/AMD): Jitify issue #60.
   protected:
   void set_error(std::string e) { error_ = std::move(e); }
 
@@ -1194,7 +1194,7 @@ class DynamicLibrary {
   }
 
   void close() { lib_.reset(); }
-  // NOTE(HIPRTC): We need it to recover errors in hipDF (BINARYOP_TEST, TRANSFORM_TEST, STREAM_BINARYOP_TEST)
+  // NOTE(HIP/AMD): Jitify issue #60.
   explicit operator bool() const { return error_.empty(); }
   const std::string& error() const { return error_; }
 
@@ -1386,7 +1386,7 @@ class LoadedProgramData {
    */
   ErrorMsg get_global_ptr(std::string symbol_name, CUdeviceptr* ptr,
                           size_t* size = nullptr) const {
-    // NOTE(HIPRTC): We need to include & in the symbol name.
+    // NOTE(HIP/AMD): We need to include & in the symbol name.
     symbol_name = "&" + detail::normalize_cuda_symbol_name(symbol_name);
     auto iter = lowered_name_map().find(symbol_name);
     if (iter != lowered_name_map().end()) {
@@ -2078,7 +2078,7 @@ inline bool endswith(StringRef str, StringRef suffix) {
 // suffix (and possibly prefix) is automatically added to the filename.
 inline CUjitInputType get_cuda_jit_input_type(std::string* filename) {
   if (endswith(*filename, ".bc")) {
-    // NOTE(HIPRTC): We use bitcode and nvvm interchageably in this code.
+    // NOTE(HIP/AMD): We use bitcode and nvvm interchageably in this code.
     return CU_JIT_INPUT_NVVM;
   } else if (endswith(*filename, ".fatbin")) {
     return CU_JIT_INPUT_FATBINARY;
@@ -2156,7 +2156,7 @@ inline bool link_programs(size_t num_programs, const std::string* programs[],
       option_keys.push_back(CU_JIT_GENERATE_DEBUG_INFO);
       option_vals.push_back((void*)(intptr_t)1);
       // HACK: Can't allow -lineinfo due to ambiguity with "-l<lib>".
-    // } else if (/*key == "-lineinfo" ||*/ key == "--generate-line-info") { // NOTE(HIPRTC): Not supported.
+    // } else if (/*key == "-lineinfo" ||*/ key == "--generate-line-info") { // NOTE(HIP/AMD): Not supported.
       option_keys.push_back(CU_JIT_GENERATE_LINE_INFO);
       option_vals.push_back((void*)(intptr_t)1);
     } else if (key == "--offload-arch" || key == "--gpu-architecture") {
@@ -2168,7 +2168,7 @@ inline bool link_programs(size_t num_programs, const std::string* programs[],
       option_keys.push_back(CU_JIT_TARGET);
       option_vals.push_back((void*)(intptr_t)arch);
     } else if (key == "-maxrregcount" || key == "--maxrregcount") {
-      // NOTE(HIPRTC): Not supported.
+      // NOTE(HIP/AMD): Not supported.
       // int max_regs = std::atoi(val.c_str());
       // option_keys.push_back(CU_JIT_MAX_REGISTERS);
       // option_vals.push_back((void*)(intptr_t)max_regs);
@@ -2269,7 +2269,7 @@ inline bool link_programs(size_t num_programs, const std::string* programs[],
     CUjitInputType jit_input_type;
     if (link_file == ".") {
       // Special case for linking to current executable.
-      // NOTE(HIPRTC): Not supported. Issue #12
+      // NOTE(HIP/AMD): Not supported. Issue #12
       // link_file = get_current_executable_path();
       // jit_input_type = CU_JIT_INPUT_OBJECT;
       JITIFY_THROW_OR_TERMINATE(
@@ -2449,7 +2449,7 @@ inline LinkedProgram LinkedProgram::link(
   if (!cuda()) return Error(cuda().error());
   for (size_t i = 0; i < num_programs; ++i) {
     const CompiledProgramData& compiled_program = *compiled_programs[i];
-    // NOTE(HIPRTC): Supported.
+    // NOTE(HIP/AMD): Supported.
     // if (std::min(CUDA_VERSION, cuda().get_version()) < 11040 &&
     //     !compiled_program.nvvm().empty()) {
     //   return Error("Linking NVVM IR is not supported with CUDA < 11.4");
@@ -2460,7 +2460,7 @@ inline LinkedProgram LinkedProgram::link(
                                            ? compiled_program.cubin()
                                            : compiled_program.ptx();
     CUjitInputType program_type =
-// #if CUDA_VERSION >= 11040 && defined(JITIFY_ENABLE_LTO) // NOTE(HIPRTC): First check bitcode/nvvm.
+// #if CUDA_VERSION >= 11040 && defined(JITIFY_ENABLE_LTO) // NOTE(HIP/AMD): First check bitcode/nvvm.
         !compiled_program.nvvm().empty() ? CU_JIT_INPUT_NVVM :
 // #endif
                                          !compiled_program.cubin().empty()
@@ -2617,6 +2617,8 @@ inline int get_current_device_compute_capability(std::string* error = nullptr) {
     arch_num = 941;
   } else if(gcnArchNameSubstr == "gfx942") {
     arch_num = 942;
+  } else if(gcnArchNameSubstr == "gfx950") {
+    arch_num = 950;
   } else if(gcnArchNameSubstr == "gfx1100") {
     arch_num = 1100;
   } else if(gcnArchNameSubstr == "gfx1101") {
@@ -2728,7 +2730,7 @@ inline bool process_architecture_flags(StringVec* compiler_options,
   // Remove the parsed arch flag entries; they are replaced below.
   compiler_options->erase(compiler_options->begin() + beg_idx,
                           compiler_options->begin() + end_idx);
-  // NOTE(HIPRTC): We need to remove "--offload-arch=gfx" from compiler flags otherwise
+  // NOTE(HIP/AMD): We need to remove "--offload-arch=gfx" from compiler flags otherwise
   // HIPRTC gives error
   auto dummy_arch_idx = compiler_options->begin();
   for (auto a : *compiler_options) {
@@ -2802,7 +2804,7 @@ inline bool process_architecture_flags(StringVec* compiler_options,
   }
   return true;
 }
-// NOTE(HIPRTC): we should use c++11. Issue #54.
+// NOTE(HIP/AMD): we should use c++11. Issue #54.
 inline void add_std_flag_if_not_specified(StringVec* options,
                                           std::string value = CPP_VERSION) {
   for (const std::string& option : *options) {
@@ -2980,7 +2982,7 @@ inline bool compile_program(
   std::vector<const char*> options_c;
   options_c.reserve(options.size());
   for (const std::string& option : options) {
-    // NOTE(HIPRTC): We don't support specifying c++03 explicitly, so remove it.
+    // NOTE(HIP/AMD): We don't support specifying c++03 explicitly, so remove it.
     // if (nvrtc().get_version() < 11010) {
       // This NVRTC doesn't support specifying c++03 explicitly, so remove it.
       // TODO: Should also support "-std" and "c++03" as separate entries.
@@ -3059,7 +3061,7 @@ inline bool compile_program(
 
   // Note that NVVM compilation is only supported with NVRTC >= 11.4.
   if (nvvm && nvrtc().GetNVVM()) {
-    // NOTE(HIPRTC): We need to recompile for hiprtc, as LLVM bitcode generation requires flag
+    // NOTE(HIP/AMD): We need to recompile for hiprtc, as LLVM bitcode generation requires flag
     // -fgpu-rdc
     options_c.push_back("-fgpu-rdc");
     nvrtcResult ret = nvrtc().CompileProgram()(
@@ -3253,9 +3255,9 @@ inline CompiledProgram CompiledProgram::compile(
                                           &error)) {
     return Error("Failed to process architecture flags: " + error);
   }
-  detail::add_std_flag_if_not_specified(&compiler_options, CPP_VERSION); // NOTE(HIPRTC): we should use c++11. Issue #54.
+  detail::add_std_flag_if_not_specified(&compiler_options, CPP_VERSION); // NOTE(HIP/AMD): we should use c++11. Issue #54.
   detail::add_cwd_include_path(&compiler_options);
-  // NOTE(HIPRTC): Not supported.
+  // NOTE(HIP/AMD): Not supported.
   // bool should_remove_unused_globals = detail::pop_flag(
   //   &compiler_options, "-remove-unused-globals", "--remove-unused-globals");
   std::string log, ptx, cubin, nvvm;
@@ -3291,7 +3293,7 @@ inline CompiledProgram CompiledProgram::compile(
     compiler_options, &linker_options, /*has_value=*/ false, "-g",
     "--debug"); //There doesn't seem to be a long option that enables debug information for HIP; 
                 // We use "--debug" as a dummy value for now.
-  // NOTE(HIPRTC): Not supported.
+  // NOTE(HIP/AMD): Not supported.
   // detail::copy_compiler_option_for_driver_ptxas(
   //   compiler_options, &linker_options, /*has_value = */ false, "-lineinfo",
   //   "--generate-line-info",
@@ -5366,7 +5368,7 @@ inline PreprocessedProgram PreprocessedProgram::preprocess(
   bool use_system_headers_war =
       !detail::pop_flag(&compiler_options, "-no-system-headers-workaround",
                         "--no-system-headers-workaround");
-// #if CUDA_VERSION >= 11000 // NOTE(HIPRTC): We never want to pre-include system headers.
+// #if CUDA_VERSION >= 11000 // NOTE(HIP/AMD): We never want to pre-include system headers.
   // This issue with /usr/include always being searched is fixed in this NVRTC.
   use_system_headers_war = false;
 // #endif
