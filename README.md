@@ -134,18 +134,8 @@ $ make doc
 
 The HTML and LaTeX results are placed into the doc/ subdirectory.
 
-## License
-
-BSD-3-Clause
-
-## Authors
-
-Ben Barsdell (NVIDIA)
-
-Kate Clark (NVIDIA)
-
 # Requirements
-- ROCm and HIP 6.2.0 or higher
+- ROCm and HIP 7.0.0 or higher
 - CMake 3.9 or higher (for building the tests)
 - AMD MI100/MI200/MI300 GPUs
 - Linux distribution (tested with Ubuntu 20.04+)
@@ -176,4 +166,17 @@ The following tests are only supported partially or have been disabled or they h
 | CompileLTO_IR | disabled | This test is not supported as LTO is not available in HIPRTC. | n/a |
 | LinkLTO | disabled | This test is not supported as LTO is not available in HIPRTC. | n/a |
 
+## License
 
+BSD-3-Clause
+
+## Authors
+
+Ben Barsdell (NVIDIA)
+
+Kate Clark (NVIDIA)
+
+Philipp Samfass (AMD)
+Dominic Charrier (AMD)
+Michael Obersteiner (AMD)
+Mohammad Norouzi (AMD)
