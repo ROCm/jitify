@@ -277,7 +277,7 @@ some trigger special behavior in Jitify as detailed below:
 
   Specifies a directory to search for include files. Jitify intercepts
   these flags and handles searching for include files itself instead
-  of relying on HIPRTC, in order to provide more flexibi
+  of relying on HIPRTC, in order to provide more flexibility.
 
 - `--offload-arch=gfx*`or `--gpu-architecture=gfx*` or `--gpu-name=gfx*` 
 
