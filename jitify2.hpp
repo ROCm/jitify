@@ -218,9 +218,9 @@
 #define ROCM_VERSION (ROCM_VERSION_MAJOR * 10000000 + ROCM_VERSION_MINOR * 100000 + ROCM_VERSION_PATCH)
 
 #if ROCM_VERSION == 70000000 || ROCM_VERSION == 70000001
-#define CPP_VERSION "c++14"
+#define JITIFY_DEFAULT_CPP_VERSION "c++14"
 #else
-#define CPP_VERSION "c++11"
+#define JITIFY_DEFAULT_CPP_VERSION "c++11"
 #endif
 
 namespace jitify2 {
@@ -2592,46 +2592,22 @@ inline int get_current_device_compute_capability(std::string* error = nullptr) {
   }
   if ((ret = cuda().CtxGetDevice()(&device)) != CUDA_SUCCESS ||
       (ret = cuda().GetDeviceProperties()(&device_prop, device)) != CUDA_SUCCESS) {
-    if (error) *error = get_cuda_error_string(ret);
+    if (error) *error = "Could not identify GPU architecture or an unsupported GPU architecture was found.";
     return 0;
   }
 
-  std::string gcnArchNameSubstr;
   std::smatch match;
   std::string gcnArchNameFull(device_prop.gcnArchName);
 
-  const std::regex gfxArchPattern("(gfx[0-9a-fA-F]+)(:[-+:\\w]+)?");
-
+  const std::regex gfxArchPattern("(gfx[0-9a-fA-F]+)(:[-+:\\w]+)?"); // only digits after "gfx"
+  int arch_num = 0;
   if (std::regex_search(gcnArchNameFull, match, gfxArchPattern)) {
-    gcnArchNameSubstr = match[1].str(); // Extract the first capture group
-  }
-
-  int arch_num = 910;
-  if(gcnArchNameSubstr == "gfx908") {
-    arch_num = 908;
-  } else if(gcnArchNameSubstr == "gfx90a") {
-    arch_num = 910;
-  } else if(gcnArchNameSubstr == "gfx940") {
-    arch_num = 940;
-  } else if(gcnArchNameSubstr == "gfx941") {
-    arch_num = 941;
-  } else if(gcnArchNameSubstr == "gfx942") {
-    arch_num = 942;
-  } else if(gcnArchNameSubstr == "gfx950") {
-    arch_num = 950;
-  } else if(gcnArchNameSubstr == "gfx1100") {
-    arch_num = 1100;
-  } else if(gcnArchNameSubstr == "gfx1101") {
-    arch_num = 1101;
-  } else if(gcnArchNameSubstr == "gfx1200") {
-    arch_num = 1200;
-  } else if(gcnArchNameSubstr == "gfx1201") {
-    arch_num = 1201;
-  } else if(gcnArchNameSubstr == "gfx1030") {
-    arch_num = 1030;
-  } else {
-    if(error) *error = "Could not identify GPU architecture or an unsupported GPU architecture was found.";
-    return 0;
+    if (match[1].str() == "gfx90a") {
+        arch_num = 910;
+    } else {
+        // remove gfx and convert the rest to int
+        arch_num = std::stoi(match[1].str().substr(3));
+    }
   }
   return arch_num;
 }
@@ -2806,7 +2782,7 @@ inline bool process_architecture_flags(StringVec* compiler_options,
 }
 // NOTE(HIP/AMD): we should use c++11. Issue #54.
 inline void add_std_flag_if_not_specified(StringVec* options,
-                                          std::string value = CPP_VERSION) {
+                                          std::string value = JITIFY_DEFAULT_CPP_VERSION) {
   for (const std::string& option : *options) {
     if (option.find("--std") != std::string::npos ||
         option.find("-std") != std::string::npos) {
@@ -3255,7 +3231,7 @@ inline CompiledProgram CompiledProgram::compile(
                                           &error)) {
     return Error("Failed to process architecture flags: " + error);
   }
-  detail::add_std_flag_if_not_specified(&compiler_options, CPP_VERSION); // NOTE(HIP/AMD): we should use c++11. Issue #54.
+  detail::add_std_flag_if_not_specified(&compiler_options, JITIFY_DEFAULT_CPP_VERSION); // NOTE(HIP/AMD): we should use c++11. Issue #54.
   detail::add_cwd_include_path(&compiler_options);
   // NOTE(HIP/AMD): Not supported.
   // bool should_remove_unused_globals = detail::pop_flag(
@@ -5388,7 +5364,7 @@ inline PreprocessedProgram PreprocessedProgram::preprocess(
         detail::get_jitsafe_headers_map().at("jitify_preinclude.h"));
     compiler_options.push_back("-includejitify_preinclude.h");
   }
-  detail::add_std_flag_if_not_specified(&compiler_options, CPP_VERSION);
+  detail::add_std_flag_if_not_specified(&compiler_options, JITIFY_DEFAULT_CPP_VERSION);
   detail::add_cwd_include_path(&compiler_options);
   bool minify = detail::pop_flag(&compiler_options, "-m", "--minify");
   // TODO: This flag is experimental, because the implementation does not
