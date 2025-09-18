@@ -3262,13 +3262,13 @@ inline CompiledProgram CompiledProgram::compile(
   */
 
   // We copy certain compiler options to linker_options so that they are used if
-  // the linker does hip->bitcode compilation prior to linking. This allows
-  // users to specify these options in compiler_options without having to worry
-  // about whether they also need to be passed in linker_options.
+  // the linker does hip->bitcode compilation prior to linking. This allows users
+  // to specify these options in compiler_options without having to worry about
+  // whether they also need to be passed in linker_options.
   detail::copy_compiler_option_for_driver_ptxas(
-    compiler_options, &linker_options, /*has_value=*/ false, "-g",
-    "--debug"); //There doesn't seem to be a long option that enables debug information for HIP; 
-                // We use "--debug" as a dummy value for now.
+      compiler_options, &linker_options, /*has_value=*/ false, "-g",
+      "--debug"); //There doesn't seem to be a long option that enables debug information for HIP; 
+                  // We use "--debug" as a dummy value for now.
   // NOTE(HIP/AMD): Not supported.
   // detail::copy_compiler_option_for_driver_ptxas(
   //   compiler_options, &linker_options, /*has_value = */ false, "-lineinfo",
