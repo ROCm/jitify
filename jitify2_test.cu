@@ -132,25 +132,14 @@ bool not_contains(const StringVec& v, const std::string& s,
 
 // some helpers for AMD backend
 std::string get_arch_name_of_current_device() {
-  hipDevice_t device;
-  hipDeviceProp_t device_prop;
+  int arch_num = jitify2::detail::get_current_device_compute_capability();
+  std::string short_arch_name = "gfx";
 
-  UTILS_CHECK_HIP(hipGetDevice(&device));
-  UTILS_CHECK_HIP(hipGetDeviceProperties(&device_prop, device));
-
-  const std::regex gfx_arch_pattern("(gfx[0-9a-fA-F]+)(:[-+:\\w]+)?");
-
-  std::smatch match;
-  std::string full_arch_name(device_prop.gcnArchName);
-  std::string short_arch_name;
-    
-  if (std::regex_search(full_arch_name, match, gfx_arch_pattern)) {
-    short_arch_name = match[1].str(); // Extract the first capture group
+  if(arch_num == 910){
+    short_arch_name += "90a";
+  } else{
+    short_arch_name += std::to_string(arch_num);
   }
-  else {
-    JITIFY_THROW_OR_TERMINATE("Cannot determine target architecture name of current device!");
-  }
-
   return short_arch_name;
 }
 
