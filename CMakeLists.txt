@@ -307,7 +307,7 @@ if(NOT JITIFY_ENABLE_CUDA_BACKEND)
     add_library(jitify INTERFACE)
     install(TARGETS jitify EXPORT jitify-targets)
 
-    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/jitify2.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/jitify2.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/jitify2_preprocess.cpp" DESTINATION include)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/jitify2.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/jitify2.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/jitify2_preprocess.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/cuda_runtime_api.h" DESTINATION include)
 
     rapids_export(
           INSTALL jitify
