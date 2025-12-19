@@ -5517,6 +5517,11 @@ inline PreprocessedProgram PreprocessedProgram::preprocess(
     std::string compiler_options_msg = detail::string_join(
         compiler_options, " ", "Compiler options: \"", "\"\n");
     std::string compile_error;
+   
+    #ifndef JITIFY_HEADER_SEARCH_STDINC 
+    compiler_options.push_back("-nostdinc++");
+    #endif
+
     while (!detail::compile_program(name, source, header_sources,
                                     compiler_options, &compile_error,
                                     &compile_log)) {
