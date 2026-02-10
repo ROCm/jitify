@@ -28,7 +28,7 @@
 
 // MIT License
 //
-// Modifications Copyright (C) 2025 Advanced Micro Devices, Inc. All rights reserved.
+// Modifications Copyright (C) 2025-2026 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -6390,7 +6390,7 @@ class AutoKey {
       }
       key_str += '\0';
     }
-    key_str += key.hash_extra_bitcode_;
+    key_str += std::to_string(key.hash_extra_bitcode_);
     return stream << sha256(key_str);
   }
 };
@@ -6652,7 +6652,8 @@ class ProgramCache {
                         extra_compiler_options, extra_linker_options,
                         extra_bitcode),
         name_expressions, extra_header_sources,
-        std::move(extra_compiler_options), std::move(extra_linker_options));
+        std::move(extra_compiler_options), std::move(extra_linker_options),
+        extra_bitcode);
   }
 
   /*! Get or build a Kernel object from the cache.
