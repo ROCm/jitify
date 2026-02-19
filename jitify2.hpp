@@ -4725,6 +4725,11 @@ static const char* const jitsafe_header_memory_h = R"(
 #include <string.h>
 )";
 
+// TODO(HIP/AMD): Workaround for libhipcxx requiring <new> header
+static const char* const jitsafe_header_new = R"(
+#pragma once
+)";
+
 // WAR: These need to be pre-added as a workaround for NVRTC implicitly using
 // /usr/include as an include path. The other built-in headers will be included
 // lazily as needed.
@@ -4769,6 +4774,7 @@ static const StringMap& get_jitsafe_headers_map() {
       {"iterator", jitsafe_header_iterator},
       {"limits", jitsafe_header_limits},
       {"mutex", jitsafe_header_mutex},
+      {"new", jitsafe_header_new},
       {"ostream", jitsafe_header_ostream},
       {"sstream", jitsafe_header_sstream},
       {"stdexcept", jitsafe_header_stdexcept},
