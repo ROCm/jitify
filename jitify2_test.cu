@@ -1098,11 +1098,10 @@ TEST(Jitify2Test, InvalidPrograms) {
   #endif
 
   // OK.
-  // NOTE(HIP/AMD): LIBHIPCXX_INC_DIR required here to include libhipcxx headers 
-  // which are not yet part of ROCm.
+  // NOTE(HIP/AMD): HIP and libhipcxx include paths required here to include libhipcxx headers.
   #ifdef JITIFY_ENABLE_LIBHIPCXX_TESTS
   EXPECT_EQ(
-      get_error(Program("found_header", "#include <cstdio>")->preprocess({"-I" LIBHIPCXX_INC_DIR})),
+      get_error(Program("found_header", "#include <cstdio>")->preprocess({"-std=c++17", "-I" LIBHIPCXX_INC_DIR, "-I" HIP_INC_DIR})),
       "");
   #endif
   // Not OK.
@@ -1658,10 +1657,9 @@ __global__ void my_kernel(T* data) {
   data[1] = std::numeric_limits<T>::max();
 }
 )";
-  // NOTE(HIP/AMD): LIBHIPCXX_INC_DIR required here to include libhipcxx headers 
-  // which are not yet part of ROCm.
+  // NOTE(HIP/AMD): HIP and libhipcxx include paths required here to include libhipcxx headers.
   PreprocessedProgram preprog =
-      Program("builtin_numeric_limits_program", source)->preprocess({"-I" LIBHIPCXX_INC_DIR});
+      Program("builtin_numeric_limits_program", source)->preprocess({"-std=c++17", "-I" LIBHIPCXX_INC_DIR, "-I" HIP_INC_DIR});
   for (const auto& type :
        {"float", "double", "char", "signed char", "unsigned char", "short",
         "unsigned short", "int", "unsigned int", "long", "unsigned long",
@@ -1821,8 +1819,9 @@ TEST(Jitify2Test, LibCudaCxx) {
     // NOTE(HIP): Adding -DLIBHIPCXX_ENABLE_HIPRTC_WORKAROUND=ON as a temporary solution.
     // Issue 50.
     Program("libcudacxx_program", source)
-        ->preprocess({"-I" LIBHIPCXX_INC_DIR, "--offload-arch=gfx90a",
-                      "-no-builtin-headers", "-no-preinclude-workarounds",
+        ->preprocess({"-I" LIBHIPCXX_INC_DIR, "-I" HIP_INC_DIR, "--offload-arch=gfx90a",
+                      "-std=c++17",
+                      /*"-no-builtin-headers",*/ "-no-preinclude-workarounds",
                       "-no-system-headers-workaround",
                       "-no-replace-pragma-once"})
         ->get_kernel("my_kernel");
@@ -1834,7 +1833,8 @@ TEST(Jitify2Test, LibCudaCxx) {
 __global__ void my_kernel() {}
 )";
   Program("libcudacxx_program", source)
-      ->preprocess({"-I" LIBHIPCXX_INC_DIR, "--offload-arch=gfx90a",
+      ->preprocess({"-I" LIBHIPCXX_INC_DIR, "-I" HIP_INC_DIR, "--offload-arch=gfx90a",
+                    "-std=c++17"
                     /*"-no-builtin-headers", "-no-preinclude-workarounds",
                     "-no-system-headers-workaround", "-no-replace-pragma-once"*/})
       ->get_kernel("my_kernel");
@@ -1912,7 +1912,7 @@ const char c = '\xff';
 // NOTE(HIP): hiprtc yields redefinition errors, if these headers are included;
 // add correct HIP_VERSION when this is supported
 //#include <hip/hip_runtime.h>
-//#if HIP_VERSION >= 60000000 
+//#if HIP_VERSION >= 60000000
 // CUB headers can be tricky to parse.
 //#include <cub/block/block_load.cuh>
 //#include <cub/block/block_radix_sort.cuh>
