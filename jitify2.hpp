@@ -2947,12 +2947,24 @@ inline bool compile_program(
 
   std::vector<const char*> header_names_c;
   std::vector<const char*> header_sources_c;
+  // NOTE(HIP/AMD): Store modified header sources to ensure they have at least one character
+  // HIPRTC doesn't accept headers with zero-length content, so we add a newline to empty ones
+  std::vector<std::string> modified_header_sources;
   size_t num_headers = header_sources.size();
   header_names_c.reserve(num_headers);
   header_sources_c.reserve(num_headers);
+  modified_header_sources.reserve(num_headers);
   for (const auto& name_source : header_sources) {
     header_names_c.push_back(name_source.first.c_str());
-    header_sources_c.push_back(name_source.second.c_str());
+
+    // NOTE(HIP/AMD): Workaround for HIPRTC not accepting zero-length headers
+    // If the header content is empty, use a single newline instead
+    if (name_source.second.empty()) {
+      modified_header_sources.push_back("\n");
+      header_sources_c.push_back(modified_header_sources.back().c_str());
+    } else {
+      header_sources_c.push_back(name_source.second.c_str());
+    }
   }
 
   std::vector<const char*> options_c;
