@@ -3555,7 +3555,15 @@ static const char* const jitsafe_header_preinclude_h =
 #define JITIFY_DEFINE_C_AND_CXX_HEADERS(name, header, std_and_global_impl) \
   JITIFY_DEFINE_C_AND_CXX_HEADERS_EX(name, header, std_and_global_impl, "")
 
-JITIFY_DEFINE_C_AND_CXX_HEADERS(assert, "", "");
+JITIFY_DEFINE_C_AND_CXX_HEADERS(assert, R"(
+// TODO(HIP/AMD): Assert implementation for HIPRTC JIT compilation
+// Problem: __assert_fail is provided by hiprtc_runtime.h but is __device__ only.
+// Host-only and __host__ __device__ functions cannot safely call it from host code.
+// In some cases, even with HIPRTC, some compiled functions are __host__ __device__.
+// Temporary solution: Disable asserts in JIT-compiled code to avoid compilation errors.
+// Device-only assert support could be added with: #if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
+#define assert(COND) ((void)0)
+)", "");
 
 JITIFY_DEFINE_C_AND_CXX_HEADERS(float, R"(
 #define FLT_RADIX       2
