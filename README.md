@@ -168,7 +168,9 @@ The following tests are only supported partially or have been disabled or they h
 
 ## License
 
-BSD-3-Clause
+The original work is licensed under BSD-3-Clause.
+
+Modifications by AMD are licensed under the MIT License.
 
 ## Authors
 
