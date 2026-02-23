@@ -81,7 +81,7 @@ if(JITIFY_ENABLE_CUDA_BACKEND)
   project(jitify LANGUAGES CXX CUDA)
 else()
   project(jitify LANGUAGES CXX HIP
-  VERSION 0.1.0
+  VERSION 0.2.0
   )
 
 
