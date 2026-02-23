@@ -135,7 +135,7 @@ $ make doc
 The HTML and LaTeX results are placed into the doc/ subdirectory.
 
 # Requirements
-- ROCm and HIP 7.0.2
+- ROCm and HIP 7.2
 - CMake 3.9 or higher (for building the tests)
 - AMD MI100/MI200/MI300 GPUs
 - Linux distribution (tested with Ubuntu 20.04+)
