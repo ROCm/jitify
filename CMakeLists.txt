@@ -20,11 +20,11 @@ cmake_minimum_required(VERSION 3.9)
 # NOTE(HIP/AMD): make *.cu files HIP lang files
 set(CMAKE_USER_MAKE_RULES_OVERRIDE "${CMAKE_CURRENT_LIST_DIR}/overrides.cmake")
 
-option(JITIFY_ONLY_CREATE_PACKAGE "Package the `jitify` subfolder." OFF)
+option(JITIFY_INSTALL "Enable CMake install rules for jitify." OFF)
 option(JITIFY_ENABLE_LIBHIPCXX_TESTS "Test the C++ header JIT compilation." ON)
 option(JITIFY_ENABLE_CUDA_BACKEND "Enables CUDA on AMD." OFF)
 
-if(JITIFY_ENABLE_LIBHIPCXX_TESTS OR JITIFY_ONLY_CREATE_PACKAGE)
+if(JITIFY_ENABLE_LIBHIPCXX_TESTS OR JITIFY_INSTALL)
   set(
     RAPIDS_CMAKE_MODULE_PATH
     $ENV{RAPIDS_CMAKE_MODULE_PATH}
@@ -300,29 +300,48 @@ if(DOXYGEN_FOUND)
 endif()
 
 if(NOT JITIFY_ENABLE_CUDA_BACKEND)
-  #------
-  # Packaging
-  # NOTE We need to consider to move to ROCm CMake from raw CPACK
-  if(JITIFY_ONLY_CREATE_PACKAGE)
-    add_library(jitify INTERFACE)
-    install(TARGETS jitify EXPORT jitify-targets)
+  add_library(jitify INTERFACE)
+  add_library(jitify::jitify ALIAS jitify)
+  target_include_directories(jitify INTERFACE
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+      $<INSTALL_INTERFACE:include>)
+  install(TARGETS jitify EXPORT jitify-targets COMPONENT devel)
 
-    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/jitify2.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/jitify2.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/jitify2_preprocess.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/cuda_runtime_api.h" DESTINATION include)
+  if(JITIFY_ENABLE_LIBHIPCXX_TESTS OR JITIFY_INSTALL)
+    set(doc_string
+        [=[
+Provide targets for jitify.
+
+jitify is a header-only library for runtime compilation and JIT-managed GPU kernels.
+
+]=])
 
     rapids_export(
-          INSTALL jitify
-          EXPORT_SET jitify-targets
-          GLOBAL_TARGETS jitify
-          NAMESPACE jitify::
-          )
+        BUILD jitify
+        EXPORT_SET jitify-targets
+        GLOBAL_TARGETS jitify
+        NAMESPACE jitify::
+        DOCUMENTATION doc_string)
+  endif()
 
-    set(DEFAULT_JITIFY_DEVEL_PACKAGE_SUFFIX "dev")
-    if (DEFINED ENV{JITIFY_DEVEL_PACKAGE_SUFFIX})
-      set(DEFAULT_JITIFY_DEVEL_PACKAGE_SUFFIX "$ENV{JITIFY_DEVEL_PACKAGE_SUFFIX}")
-    endif()
+  if(JITIFY_INSTALL)
+    install(
+      FILES
+        "${CMAKE_CURRENT_SOURCE_DIR}/jitify2.hpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/jitify2_preprocess.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/cuda_runtime_api.h"
+      DESTINATION include
+      COMPONENT devel)
 
-    set(JITIFY_DEVEL_PACKAGE_SUFFIX "${DEFAULT_JITIFY_DEVEL_PACKAGE_SUFFIX}" CACHE STRING "Overwrite development package suffix.")
-    set(CPACK_PACKAGE_NAME "rocm-hip-jitify-${JITIFY_DEVEL_PACKAGE_SUFFIX}" CACHE STRING "Overwrite package name.")
+    rapids_export(
+        INSTALL jitify
+        EXPORT_SET jitify-targets
+        GLOBAL_TARGETS jitify
+        NAMESPACE jitify::
+        DOCUMENTATION doc_string
+        PROJECT_COMPONENT devel)
+
+    set(CPACK_PACKAGE_NAME "hip-jitify" CACHE STRING "Overwrite package name.")
     set(CPACK_PACKAGE_VENDOR "Advanced Micro Devices, Inc.")
     set(CPACK_DEBIAN_PACKAGE_MAINTAINER "${CPACK_PACKAGE_VENDOR}")
     set(CPACK_OUTPUT_FILE_PREFIX "dist" CACHE PATH "Package output file prefix.")
@@ -330,8 +349,16 @@ if(NOT JITIFY_ENABLE_CUDA_BACKEND)
     set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
     set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
     set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
+
+    set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME devel)
+    set(CPACK_COMPONENTS_ALL devel)
+    set(CPACK_DEB_COMPONENT_INSTALL ON)
+    set(CPACK_RPM_COMPONENT_INSTALL ON)
+    set(CPACK_DEBIAN_DEVEL_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-dev")
+    set(CPACK_RPM_DEVEL_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-devel")
     set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
-    set(CPACK_PACKAGING_INSTALL_PREFIX "/opt/rocm-ds" CACHE PATH "Package install prefix.")
+    set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
+
     include(CPack)
   endif()
 endif()
