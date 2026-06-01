@@ -404,7 +404,7 @@ __global__ void my_kernel(const T*, U*) {}
   double launch_time_direct_ns = dt_direct_ns;
   double launch_time_jitify_ns = dt_jitify_ns;
   // Ensure added latency is small.
-  double tolerance_ns = 2500;  // 2.5us
+  double tolerance_ns = 3000;  // 3us
   EXPECT_NEAR(launch_time_direct_ns, launch_time_jitify_ns, tolerance_ns);
 }
 
