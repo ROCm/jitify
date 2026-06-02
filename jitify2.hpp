@@ -5531,6 +5531,18 @@ inline PreprocessedProgram PreprocessedProgram::preprocess(
   std::string compile_log, header_log;
   // Repeat preprocessing for each specified architecture.
   for (const ArchFlag& arch_flag : arch_flags) {
+    // NOTE(HIP/AMD): Push "-nostdinc++" *before* the temporary arch flag. The
+    // arch flag is removed after compilation with a single pop_back(), which
+    // assumes it is the last element. If "-nostdinc++" were pushed after the
+    // arch flag, that pop_back() would remove "-nostdinc++" instead, leaving the
+    // arch flag behind in the (serialized) compiler options. Such a leaked
+    // "--offload-arch=gfxNNN" then overrides the architecture detected for the
+    // current device at runtime, causing HSA_STATUS_ERROR_ILLEGAL_INSTRUCTION on
+    // a mismatched GPU (e.g. a gfx942 binary launched on a gfx90a device).
+    #ifndef JITIFY_HEADER_SEARCH_STDINC
+    compiler_options.push_back("-nostdinc++");
+    #endif
+
     if (arch_flag.cc) {
       // Temporarily add this arch flag.
       // NOTE(HIP): Convert 910 to 90a to prevent compiler error
@@ -5543,10 +5555,6 @@ inline PreprocessedProgram PreprocessedProgram::preprocess(
     std::string compiler_options_msg = detail::string_join(
         compiler_options, " ", "Compiler options: \"", "\"\n");
     std::string compile_error;
-   
-    #ifndef JITIFY_HEADER_SEARCH_STDINC 
-    compiler_options.push_back("-nostdinc++");
-    #endif
 
     while (!detail::compile_program(name, source, header_sources,
                                     compiler_options, &compile_error,
