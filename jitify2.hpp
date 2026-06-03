@@ -5531,17 +5531,18 @@ inline PreprocessedProgram PreprocessedProgram::preprocess(
   std::string compile_log, header_log;
   // Repeat preprocessing for each specified architecture.
   for (const ArchFlag& arch_flag : arch_flags) {
-    // NOTE(HIP/AMD): Push "-nostdinc++" *before* the temporary arch flag. The
-    // arch flag is removed after compilation with a single pop_back(), which
-    // assumes it is the last element. If "-nostdinc++" were pushed after the
-    // arch flag, that pop_back() would remove "-nostdinc++" instead, leaving the
-    // arch flag behind in the (serialized) compiler options. Such a leaked
-    // "--offload-arch=gfxNNN" then overrides the architecture detected for the
-    // current device at runtime, causing HSA_STATUS_ERROR_ILLEGAL_INSTRUCTION on
+    // NOTE(HIP/AMD): Snapshot the option count so the temporary per-arch flag and
+    // -nostdinc++ added during this iteration can be removed via resize() below.
+    // Cleanup must be independent of push order: a previous single pop_back()
+    // assumed the arch flag was the last element, but -nostdinc++ is pushed after
+    // it, so pop_back() removed -nostdinc++ and the concrete --offload-arch=gfxNNN
+    // leaked into the serialized compiler options. A leaked arch flag overrides
+    // runtime device detection and causes HSA_STATUS_ERROR_ILLEGAL_INSTRUCTION on
     // a mismatched GPU (e.g. a gfx942 binary launched on a gfx90a device).
-    #ifndef JITIFY_HEADER_SEARCH_STDINC
-    compiler_options.push_back("-nostdinc++");
-    #endif
+    // The arch flag is added before compiler_options_msg (so the message matches
+    // what the compiler was invoked with) while -nostdinc++ is added after it (so
+    // it stays out of that message, as the InvalidPrograms test expects).
+    const size_t num_options_before_iteration = compiler_options.size();
 
     if (arch_flag.cc) {
       // Temporarily add this arch flag.
@@ -5555,6 +5556,10 @@ inline PreprocessedProgram PreprocessedProgram::preprocess(
     std::string compiler_options_msg = detail::string_join(
         compiler_options, " ", "Compiler options: \"", "\"\n");
     std::string compile_error;
+
+    #ifndef JITIFY_HEADER_SEARCH_STDINC
+    compiler_options.push_back("-nostdinc++");
+    #endif
 
     while (!detail::compile_program(name, source, header_sources,
                                     compiler_options, &compile_error,
@@ -5637,9 +5642,10 @@ inline PreprocessedProgram PreprocessedProgram::preprocess(
     // NOTE(HIP): We could compile the program, so empty the compile_log
     compile_log = "";
 
-    if (arch_flag.cc) {
-      compiler_options.pop_back();  // Remove the temporary arch flag we added
-    }
+    // Remove everything added during this iteration (the temporary arch flag and
+    // -nostdinc++). resize() is order-independent, so the arch flag never leaks
+    // into the serialized remaining_compiler_options_.
+    compiler_options.resize(num_options_before_iteration);
   }
 
   // Remove the program source from header_sources now that processing is done.
