@@ -135,10 +135,11 @@ $ make doc
 The HTML and LaTeX results are placed into the doc/ subdirectory.
 
 # Requirements
-- ROCm and HIP 7.2
+- ROCm and HIP 7.2.3
 - CMake 3.9 or higher (for building the tests)
-- AMD MI100/MI200/MI300 GPUs
-- Linux distribution (tested with Ubuntu 20.04+)
+- gfx90a, gfx942, gfx950
+- Tested on AMD Instinct MI210X, MI250, MI300X, MI325X, and MI355X accelerators.
+- Linux distribution (tested with Ubuntu 24.04, 22.04)
 
 # Current Limitations
 - No support for Windows.
