@@ -47,8 +47,10 @@
 #                               resolves to CONDA_PREFIX.
 #   CPACK_PACKAGING_INSTALL_PREFIX  Prefix baked into the packages. Defaults to
 #                               CMAKE_INSTALL_PREFIX.
-#   RAPIDS_CMAKE_MODULE_PATH    Where the rocmds-cmake modules are installed;
-#                               when set, they are used instead of a download.
+#   RAPIDS_CMAKE_MODULE_PATH    Where the rocmds-cmake modules live, either an
+#                               installed package or a source checkout; the
+#                               project reads it from the environment and uses
+#                               those modules instead of a download.
 #   AMDGPU_TARGETS              GPU architectures to compile for.
 #   SCCACHE_ENABLE              'true' enables the sccache launchers.
 #   CMAKE_VERSION               When set, cmake of that version is installed
@@ -121,7 +123,6 @@ cmake_args=(
   "-D CPACK_OUTPUT_FILE_PREFIX=${BUILD_ARTIFACTS_DIR}"
   "-D CPACK_GENERATOR=${cpack_generators}"
   ${no_use_versions_json:+"-D CPM_libhipcxx_SOURCE=${SRC_DIR}/libhipcxx"}
-  ${no_use_versions_json:+"-D CPM_rapids_logger_SOURCE=${SRC_DIR}/rocmds_logger"}
   ${CMAKE_PREFIX_PATH:+"-D CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}${ROCM_PATH:+:${ROCM_PATH}/lib/cmake}"}
   ${AMDGPU_TARGETS:+"-D CMAKE_HIP_ARCHITECTURES=${AMDGPU_TARGETS}"}
   ${CMAKE_POLICY_VERSION_MINIMUM:+"-D CMAKE_POLICY_VERSION_MINIMUM=${CMAKE_POLICY_VERSION_MINIMUM}"}
@@ -129,16 +130,6 @@ cmake_args=(
   ${use_sccache:+"-D CMAKE_CXX_COMPILER_LAUNCHER=sccache"}
   ${use_sccache:+"-D CMAKE_C_COMPILER_LAUNCHER=sccache"}
 )
-
-# The Docker images ship rocmds-cmake as a package; point the build at it so it
-# does not try to download the modules.
-if [ -n "${RAPIDS_CMAKE_MODULE_PATH:-}" ]; then
-  cmake_args+=(
-    "-D RAPIDS_CMAKE_FROM_MODULE_PATH=1"
-    "-D CMAKE_MODULE_PATH=${RAPIDS_CMAKE_MODULE_PATH}"
-    "-D NVBench_DISABLE_INSTALL_CPM_DOWNLOADS=1"
-  )
-fi
 
 if [ -n "${install_to_conda_prefix:-}" ]; then
   cmake_args+=(
