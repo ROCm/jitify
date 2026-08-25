@@ -40,6 +40,18 @@ set -xeu
 PROJECT_ID="${PROJECT_ID:-jitify}"
 build_build_dir="${BUILD_DIR}/${PROJECT_ID}/build"
 
+# cmake comes from this venv.
+venv_dir="${BUILD_DIR}/${PROJECT_ID}/_venv"
+if [ -n "${CMAKE_VERSION:-}" ]; then
+  python3 --version
+  python3 -m venv --clear "${venv_dir}"
+  # shellcheck disable=SC1091
+  . "${venv_dir}/bin/activate"
+  pip3 install --upgrade pip
+  pip3 install "cmake==${CMAKE_VERSION}"
+fi
+cmake --version && ctest --version
+
 if [ -d "/opt/rh/gcc-toolset-$(g++ -dumpversion)/root/usr" ]; then
   toolchain="--gcc-toolchain=/opt/rh/gcc-toolset-$(g++ -dumpversion)/root/usr"
   export CCC_OVERRIDE_OPTIONS="+${toolchain}"
