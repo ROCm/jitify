@@ -128,7 +128,10 @@ fi
 
 #### configure
 
+# JITIFY_ONLY_CREATE_PACKAGE is what gates include(CPack), so it has to be on
+# for the 'package' target to exist at all.
 cmake_args=(
+  "-D JITIFY_ONLY_CREATE_PACKAGE=ON"
   "-D JITIFY_ENABLE_LIBHIPCXX_TESTS=ON"
   "-D CMAKE_VERBOSE_MAKEFILE=ON"
   "-D CPACK_OUTPUT_FILE_PREFIX=${BUILD_ARTIFACTS_DIR}"
