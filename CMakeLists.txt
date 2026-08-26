@@ -20,6 +20,11 @@ cmake_minimum_required(VERSION 3.9)
 # NOTE(HIP/AMD): make *.cu files HIP lang files
 set(CMAKE_USER_MAKE_RULES_OVERRIDE "${CMAKE_CURRENT_LIST_DIR}/overrides.cmake")
 
+# NOTE(HIP/AMD): This stays opt-in and defaults to OFF because hipDF and hipMM
+# pull jitify in through CPM, which add_subdirectory's this project into theirs.
+# Install rules declared here would then run on the parent's install, and
+# include(CPack) would write into the parent's top-level binary directory.
+# Standalone builds that want the packages, such as CI, pass -D JITIFY_INSTALL=ON.
 option(JITIFY_INSTALL "Enable CMake install rules for jitify." OFF)
 option(JITIFY_ENABLE_LIBHIPCXX_TESTS "Test the C++ header JIT compilation." ON)
 option(JITIFY_ENABLE_CUDA_BACKEND "Enables CUDA on AMD." OFF)
