@@ -20,68 +20,65 @@ cmake_minimum_required(VERSION 3.9)
 # NOTE(HIP/AMD): make *.cu files HIP lang files
 set(CMAKE_USER_MAKE_RULES_OVERRIDE "${CMAKE_CURRENT_LIST_DIR}/overrides.cmake")
 
-option(JITIFY_INSTALL "Enable CMake install rules for jitify." OFF)
 option(JITIFY_ENABLE_LIBHIPCXX_TESTS "Test the C++ header JIT compilation." ON)
 option(JITIFY_ENABLE_CUDA_BACKEND "Enables CUDA on AMD." OFF)
 
-if(JITIFY_ENABLE_LIBHIPCXX_TESTS OR JITIFY_INSTALL)
-  set(
-    RAPIDS_CMAKE_MODULE_PATH
-    "$ENV{RAPIDS_CMAKE_MODULE_PATH}"
-    CACHE FILEPATH
-    "Announce that ROCmDS-CMake is available via the provided module path."
-  )
-  if (NOT "${RAPIDS_CMAKE_MODULE_PATH}" STREQUAL "")
-    list(APPEND CMAKE_MODULE_PATH "${RAPIDS_CMAKE_MODULE_PATH}")
-    include(rapids-cmake)  # ensure rapids-cmake-dir is set
-    # NOTE(HIP/AMD): Only the installed ROCmDS-CMake package defines
-    # rapids-cmake-dir, a source checkout does not.
-    if(NOT DEFINED rapids-cmake-dir)
-      set(rapids-cmake-dir "${RAPIDS_CMAKE_MODULE_PATH}")
+set(
+  RAPIDS_CMAKE_MODULE_PATH
+  "$ENV{RAPIDS_CMAKE_MODULE_PATH}"
+  CACHE FILEPATH
+  "Announce that ROCmDS-CMake is available via the provided module path."
+)
+if (NOT "${RAPIDS_CMAKE_MODULE_PATH}" STREQUAL "")
+  list(APPEND CMAKE_MODULE_PATH "${RAPIDS_CMAKE_MODULE_PATH}")
+  include(rapids-cmake)  # ensure rapids-cmake-dir is set
+  # NOTE(HIP/AMD): Only the installed ROCmDS-CMake package defines
+  # rapids-cmake-dir, a source checkout does not.
+  if(NOT DEFINED rapids-cmake-dir)
+    set(rapids-cmake-dir "${RAPIDS_CMAKE_MODULE_PATH}")
+  endif()
+else()
+  if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/JITIFY_RAPIDS.cmake)
+    if(DEFINED ENV{RAPIDS_CMAKE_SCRIPT_REPO})
+      set(RAPIDS_CMAKE_SCRIPT_REPO "$ENV{RAPIDS_CMAKE_SCRIPT_REPO}")
+    else()
+      set(RAPIDS_CMAKE_SCRIPT_REPO ROCm-DS/ROCmDS-CMake)
     endif()
-  else()
-    if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/JITIFY_RAPIDS.cmake)
-      if(DEFINED ENV{RAPIDS_CMAKE_SCRIPT_REPO})
-        set(RAPIDS_CMAKE_SCRIPT_REPO "$ENV{RAPIDS_CMAKE_SCRIPT_REPO}")
-      else()
-        set(RAPIDS_CMAKE_SCRIPT_REPO ROCm-DS/ROCmDS-CMake)
-      endif()
-      if(DEFINED ENV{RAPIDS_CMAKE_SCRIPT_BRANCH})
-        set(RAPIDS_CMAKE_SCRIPT_BRANCH "$ENV{RAPIDS_CMAKE_SCRIPT_BRANCH}")
-      else()
-        set(RAPIDS_CMAKE_SCRIPT_BRANCH release/2.0.x)
-      endif()
-
-      set(URL "https://raw.githubusercontent.com/${RAPIDS_CMAKE_SCRIPT_REPO}/${RAPIDS_CMAKE_SCRIPT_BRANCH}/RAPIDS.cmake")
-      file(DOWNLOAD ${URL}
-        ${CMAKE_CURRENT_BINARY_DIR}/JITIFY_RAPIDS.cmake
-        STATUS DOWNLOAD_STATUS
-      )
-      list(GET DOWNLOAD_STATUS 0 STATUS_CODE)
-      list(GET DOWNLOAD_STATUS 1 ERROR_MESSAGE)
-
-      if(${STATUS_CODE} EQUAL 0)
-        message(STATUS "Downloaded 'JITIFY_RAPIDS.cmake' successfully!")
-      else()
-        file(REMOVE ${CMAKE_CURRENT_BINARY_DIR}/JITIFY_RAPIDS.cmake)
-        # for debuging: message(FATAL_ERROR "Failed to download 'JITIFY_RAPIDS.cmake'. URL: ${URL}, Reason: ${ERROR_MESSAGE}")
-        message(FATAL_ERROR "Failed to download 'JITIFY_RAPIDS.cmake'. Reason: ${ERROR_MESSAGE}")
-      endif()
+    if(DEFINED ENV{RAPIDS_CMAKE_SCRIPT_BRANCH})
+      set(RAPIDS_CMAKE_SCRIPT_BRANCH "$ENV{RAPIDS_CMAKE_SCRIPT_BRANCH}")
+    else()
+      set(RAPIDS_CMAKE_SCRIPT_BRANCH release/2.0.x)
     endif()
 
-    if(DEFINED ENV{RAPIDS_CMAKE_BRANCH})
-      set(rapids-cmake-branch $ENV{RAPIDS_CMAKE_BRANCH})
-    endif()
+    set(URL "https://raw.githubusercontent.com/${RAPIDS_CMAKE_SCRIPT_REPO}/${RAPIDS_CMAKE_SCRIPT_BRANCH}/RAPIDS.cmake")
+    file(DOWNLOAD ${URL}
+      ${CMAKE_CURRENT_BINARY_DIR}/JITIFY_RAPIDS.cmake
+      STATUS DOWNLOAD_STATUS
+    )
+    list(GET DOWNLOAD_STATUS 0 STATUS_CODE)
+    list(GET DOWNLOAD_STATUS 1 ERROR_MESSAGE)
 
-    include(${CMAKE_CURRENT_BINARY_DIR}/JITIFY_RAPIDS.cmake)
+    if(${STATUS_CODE} EQUAL 0)
+      message(STATUS "Downloaded 'JITIFY_RAPIDS.cmake' successfully!")
+    else()
+      file(REMOVE ${CMAKE_CURRENT_BINARY_DIR}/JITIFY_RAPIDS.cmake)
+      # for debuging: message(FATAL_ERROR "Failed to download 'JITIFY_RAPIDS.cmake'. URL: ${URL}, Reason: ${ERROR_MESSAGE}")
+      message(FATAL_ERROR "Failed to download 'JITIFY_RAPIDS.cmake'. Reason: ${ERROR_MESSAGE}")
+    endif()
   endif()
 
-  include(rapids-cmake)
-  include(rapids-cpm)
-  include(rapids-export)
+  if(DEFINED ENV{RAPIDS_CMAKE_BRANCH})
+    set(rapids-cmake-branch $ENV{RAPIDS_CMAKE_BRANCH})
+  endif()
 
-  rapids_cpm_init()
+  include(${CMAKE_CURRENT_BINARY_DIR}/JITIFY_RAPIDS.cmake)
 endif()
+
+include(rapids-cmake)
+include(rapids-cpm)
+include(rapids-export)
+
+rapids_cpm_init()
 
 if(JITIFY_ENABLE_CUDA_BACKEND)
   project(jitify LANGUAGES CXX CUDA)
@@ -313,58 +310,54 @@ if(NOT JITIFY_ENABLE_CUDA_BACKEND)
       $<INSTALL_INTERFACE:include>)
   install(TARGETS jitify EXPORT jitify-targets COMPONENT devel)
 
-  if(JITIFY_ENABLE_LIBHIPCXX_TESTS OR JITIFY_INSTALL)
-    set(doc_string
-        [=[
+  set(doc_string
+      [=[
 Provide targets for jitify.
 
 jitify is a header-only library for runtime compilation and JIT-managed GPU kernels.
 
 ]=])
 
-    rapids_export(
-        BUILD jitify
-        EXPORT_SET jitify-targets
-        GLOBAL_TARGETS jitify
-        NAMESPACE jitify::
-        DOCUMENTATION doc_string)
-  endif()
+  rapids_export(
+      BUILD jitify
+      EXPORT_SET jitify-targets
+      GLOBAL_TARGETS jitify
+      NAMESPACE jitify::
+      DOCUMENTATION doc_string)
 
-  if(JITIFY_INSTALL)
-    install(
-      FILES
-        "${CMAKE_CURRENT_SOURCE_DIR}/jitify2.hpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/jitify2_preprocess.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/cuda_runtime_api.h"
-      DESTINATION include
-      COMPONENT devel)
+  install(
+    FILES
+      "${CMAKE_CURRENT_SOURCE_DIR}/jitify2.hpp"
+      "${CMAKE_CURRENT_SOURCE_DIR}/jitify2_preprocess.cpp"
+      "${CMAKE_CURRENT_SOURCE_DIR}/cuda_runtime_api.h"
+    DESTINATION include
+    COMPONENT devel)
 
-    rapids_export(
-        INSTALL jitify
-        EXPORT_SET jitify-targets
-        GLOBAL_TARGETS jitify
-        NAMESPACE jitify::
-        DOCUMENTATION doc_string
-        PROJECT_COMPONENT devel)
+  rapids_export(
+      INSTALL jitify
+      EXPORT_SET jitify-targets
+      GLOBAL_TARGETS jitify
+      NAMESPACE jitify::
+      DOCUMENTATION doc_string
+      PROJECT_COMPONENT devel)
 
-    set(CPACK_PACKAGE_NAME "hip-jitify" CACHE STRING "Overwrite package name.")
-    set(CPACK_PACKAGE_VENDOR "Advanced Micro Devices, Inc.")
-    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "${CPACK_PACKAGE_VENDOR}")
-    set(CPACK_OUTPUT_FILE_PREFIX "dist" CACHE PATH "Package output file prefix.")
-    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
-    set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
-    set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
-    set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
+  set(CPACK_PACKAGE_NAME "hip-jitify" CACHE STRING "Overwrite package name.")
+  set(CPACK_PACKAGE_VENDOR "Advanced Micro Devices, Inc.")
+  set(CPACK_DEBIAN_PACKAGE_MAINTAINER "${CPACK_PACKAGE_VENDOR}")
+  set(CPACK_OUTPUT_FILE_PREFIX "dist" CACHE PATH "Package output file prefix.")
+  set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+  set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
+  set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
+  set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
 
-    set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME devel)
-    set(CPACK_COMPONENTS_ALL devel)
-    set(CPACK_DEB_COMPONENT_INSTALL ON)
-    set(CPACK_RPM_COMPONENT_INSTALL ON)
-    set(CPACK_DEBIAN_DEVEL_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-dev")
-    set(CPACK_RPM_DEVEL_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-devel")
-    set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
-    set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
+  set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME devel)
+  set(CPACK_COMPONENTS_ALL devel)
+  set(CPACK_DEB_COMPONENT_INSTALL ON)
+  set(CPACK_RPM_COMPONENT_INSTALL ON)
+  set(CPACK_DEBIAN_DEVEL_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-dev")
+  set(CPACK_RPM_DEVEL_PACKAGE_NAME "${CPACK_PACKAGE_NAME}-devel")
+  set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+  set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
 
-    include(CPack)
-  endif()
+  include(CPack)
 endif()
