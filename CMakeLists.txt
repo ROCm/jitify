@@ -290,6 +290,12 @@ endforeach(test)
 # NOTE(HIP): Build and test separately.
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --verbose
                   DEPENDS ${TESTS})
+# Builds the test executables without running them, so that CI can compile them
+# in the builder image and leave the tester image with nothing to do but ctest.
+# The executables stay EXCLUDE_FROM_ALL because parent projects configure this
+# file too; the target name carries the project prefix to avoid colliding with
+# a target of theirs.
+add_custom_target(jitify_tests DEPENDS ${TESTS})
 
 # ----
 # Docs
