@@ -189,6 +189,9 @@ cmake --version && cpack --version && ctest --version
 
 cmake -S ${build_src_dir} -B ${build_build_dir} ${cmake_args[@]}
 cmake --build ${build_build_dir} ${build_args[@]}
+# The test executables are EXCLUDE_FROM_ALL, so they need their own target. They
+# are built here rather than in the tester image, which only runs them.
+cmake --build ${build_build_dir} --target jitify_tests ${build_args[@]}
 cmake --build ${build_build_dir} --target package ${build_args[@]}
 
 if [ -n "${do_install:-}" ]; then

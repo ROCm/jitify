@@ -25,6 +25,11 @@
 # The tester images reach this script through the source tree shipped inside
 # the tests tarball.
 #
+# ci/internal/build.sh already compiled the test executables, so this only runs
+# them. Nothing here configures or builds: a 'cmake --build' would first check
+# the generated build system against every file the configure step read, and
+# re-run configure once one of them is missing in the tester image.
+#
 # Required environment variables:
 #   BUILD_DIR  Scratch directory the build tree was created in.
 #
@@ -40,7 +45,7 @@ set -xeu
 PROJECT_ID="${PROJECT_ID:-jitify}"
 build_build_dir="${BUILD_DIR}/${PROJECT_ID}/build"
 
-# cmake comes from this venv.
+# ctest comes from this venv.
 venv_dir="${BUILD_DIR}/${PROJECT_ID}/_venv"
 if [ -n "${CMAKE_VERSION:-}" ]; then
   python3 --version
@@ -50,11 +55,11 @@ if [ -n "${CMAKE_VERSION:-}" ]; then
   pip3 install --upgrade pip
   pip3 install "cmake==${CMAKE_VERSION}"
 fi
-cmake --version && ctest --version
+ctest --version
 
 if [ -d "/opt/rh/gcc-toolset-$(g++ -dumpversion)/root/usr" ]; then
   toolchain="--gcc-toolchain=/opt/rh/gcc-toolset-$(g++ -dumpversion)/root/usr"
   export CCC_OVERRIDE_OPTIONS="+${toolchain}"
 fi
 
-cmake --build "${build_build_dir}" --target check
+ctest --verbose --test-dir "${build_build_dir}"
