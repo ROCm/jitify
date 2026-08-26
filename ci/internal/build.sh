@@ -136,6 +136,11 @@ cmake_args=(
   "-D JITIFY_INSTALL=ON"
   "-D JITIFY_ENABLE_LIBHIPCXX_TESTS=ON"
   "-D CMAKE_VERBOSE_MAKEFILE=ON"
+  # googletest is added before the project points CMAKE_CXX_COMPILER at hipcc,
+  # so its archives come from the gcc toolset while the test executables are
+  # linked by clang, which defaults to -pie. Without this, that link fails on
+  # 32-bit relocations into libgtest.a.
+  "-D CMAKE_POSITION_INDEPENDENT_CODE=ON"
   "-D CPACK_OUTPUT_FILE_PREFIX=${BUILD_ARTIFACTS_DIR}"
   "-D CPACK_GENERATOR=${cpack_generators}"
   ${no_use_versions_json:+"-D CPM_libhipcxx_SOURCE=${SRC_DIR}/libhipcxx"}
