@@ -4746,6 +4746,15 @@ static const std::unordered_set<std::string>& get_workaround_system_headers() {
       {
           "assert.h", "limits.h", "math.h", "stdint.h", "stdio.h",
           "stdlib.h", "string.h", "time.h", "memory.h",
+          // NOTE(HIP/AMD): Jitify issue #78. Only the names the hipRTC/comgr VFS
+          // actually serves are listed here. They have to be shadowed, or comgr's
+          // partial libc++ is found instead of ours and then drags in libc++
+          // internals it does not itself carry. Everything else is deliberately
+          // absent so load_header_impl resolves it on demand, as designed.
+          // <initializer_list> is served by comgr but must NOT be shadowed: the
+          // jitsafe version does not define std::initializer_list, which
+          // cuda/std/initializer_list requires.
+          "stddef.h", "cstddef", "cstdint", "type_traits", "limits", "tuple",
       };
   return workaround_system_header_names;
 }
@@ -5370,10 +5379,27 @@ inline PreprocessedProgram PreprocessedProgram::preprocess(
   bool use_system_headers_war =
       !detail::pop_flag(&compiler_options, "-no-system-headers-workaround",
                         "--no-system-headers-workaround");
-// #if CUDA_VERSION >= 11000 // NOTE(HIP/AMD): We never want to pre-include system headers.
-  // This issue with /usr/include always being searched is fixed in this NVRTC.
+#if defined(__HIP_PLATFORM_AMD__)
+  // NOTE(HIP/AMD): Jitify issue #78. This workaround exists for RTC implementations that force
+  // headers into the compile whether or not the caller wants them - originally NVRTC < 11.0,
+  // which always searched /usr/include. comgr has regressed into the same category: it adds its
+  // own partial libc++ via -idirafter, after the caller's options, so -nostdinc cannot remove it.
+  //
+  // That breaks the precondition the normal path relies on. load_header_impl is only consulted
+  // for includes the compiler reports as missing; when comgr's copy is found instead, jitify is
+  // never asked, and the compile then dies inside libc++ on internals comgr does not carry.
+  // Pre-injecting the affected names into header_sources - the one directory searched ahead of
+  // comgr's - restores "nothing is found", so the on-demand path works again for everything else.
+  //
+  // TODO(HIP/AMD): Gate this on the ROCm version once the complete range of affected versions is
+  // known. The analogous NVRTC gate is "on below 11.0, off at 11.0+". For HIP the discriminator
+  // is whether comgr's search list contains include/c++/v1; the lowest ROCm version where this
+  // regression is absent has not yet been measured (see issue #78). Until that range is confirmed,
+  // __HIP_PLATFORM_AMD__ is used as the guard.
+#else
+  // This issue with /usr/include always being searched is fixed in NVRTC >= 11.0.
   use_system_headers_war = false;
-// #endif
+#endif
   if (use_system_headers_war) {
     // Workaround for /usr/include always being searched by NVRTC.
     for (const std::string& header_name :
