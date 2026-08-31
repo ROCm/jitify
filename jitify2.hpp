@@ -2936,6 +2936,8 @@ inline void find_lowered_global_variables(StringRef ptx,
 }
 */
 
+inline std::string sanitize_filename(const std::string& filename);
+
 // Returns false on error.
 // Sets *error on failure if provided.
 // Sets *log if provided.
@@ -2987,9 +2989,17 @@ inline bool compile_program(
     options_c.push_back(option.c_str());
   }
 
+  // NOTE(HIP/AMD): comgr writes the source to a file named after the program,
+  // so characters a filename cannot hold have to be encoded first.
+#if defined(__HIP_PLATFORM_AMD__)
+  const std::string rtc_name = sanitize_filename(name);
+#else
+  const std::string& rtc_name = name;
+#endif
+
   nvrtcProgram nvrtc_program;
   JITIFY_CHECK_NVRTC(nvrtc().CreateProgram()(
-      &nvrtc_program, source.c_str(), name.c_str(), (int)num_headers,
+      &nvrtc_program, source.c_str(), rtc_name.c_str(), (int)num_headers,
       header_sources_c.data(), header_names_c.data()));
   struct ScopedNvrtcProgramDestroyer {
     nvrtcProgram& nvrtc_program_;
