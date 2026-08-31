@@ -2965,6 +2965,12 @@ inline bool compile_program(
   header_sources_c.reserve(num_headers);
   modified_header_sources.reserve(num_headers);
   for (const auto& name_source : header_sources) {
+    // NOTE(HIP/AMD): preprocess() keeps the program's own source in
+    // header_sources under the program name. The compiler is given the source
+    // separately, so skip that entry rather than hand comgr a header named
+    // after the program, which it would write to a file.
+    if (name_source.first == name) continue;
+
     header_names_c.push_back(name_source.first.c_str());
 
     // NOTE(HIP/AMD): Workaround for HIPRTC not accepting zero-length headers
@@ -2999,8 +3005,9 @@ inline bool compile_program(
 
   nvrtcProgram nvrtc_program;
   JITIFY_CHECK_NVRTC(nvrtc().CreateProgram()(
-      &nvrtc_program, source.c_str(), rtc_name.c_str(), (int)num_headers,
-      header_sources_c.data(), header_names_c.data()));
+      &nvrtc_program, source.c_str(), rtc_name.c_str(),
+      (int)header_names_c.size(), header_sources_c.data(),
+      header_names_c.data()));
   struct ScopedNvrtcProgramDestroyer {
     nvrtcProgram& nvrtc_program_;
     ScopedNvrtcProgramDestroyer(nvrtcProgram& nvrtc_program)
