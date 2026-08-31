@@ -42,8 +42,11 @@ Jitify as detailed below:
 
   Unless otherwise specified, this flag is automatically passed to
   HIPRTC for all kernels and is set to `c++11` (which is the minimum
-  requirement for Jitify itself). Jitify also supports the value
-  `-std=c++03` for explicitly selecting the `C++03` standard.
+  requirement for Jitify itself). On the ROCm versions whose comgr
+  force-includes a `hiprtc_runtime.h` that needs `c++14` — ROCm 7.0.0,
+  7.0.1 and 7.15 and above — the default is `c++14` instead. Jitify
+  also supports the value `-std=c++03` for explicitly selecting the
+  `C++03` standard.
 
 - `--minify (-m)`
 

@@ -213,11 +213,19 @@
 
 #endif  // not JITIFY_SERIALIZATION_ONLY
 
-// NOTE(AMD/HIP): hiprtc cannot compile with c++11 on ROCm 7.0.0 and 7.0.1. Issue #54.
 #include <rocm-core/rocm_version.h>
 #define ROCM_VERSION (ROCM_VERSION_MAJOR * 10000000 + ROCM_VERSION_MINOR * 100000 + ROCM_VERSION_PATCH)
 
-#if ROCM_VERSION == 70000000 || ROCM_VERSION == 70000001
+// NOTE(AMD/HIP): hipRTC cannot compile with c++11 on the ROCm versions whose
+// comgr force-includes a hiprtc_runtime.h that uses deduced return types into
+// every compile via <built-in>:
+//   hiprtc_runtime.h:11087: error: 'auto' return without trailing return type;
+//   deduced return types are a C++14 extension
+// That was the case on ROCm 7.0.0 and 7.0.1 (issue #54), was fixed in between,
+// and has regressed again from ROCm 7.15 onwards. Everything below that still
+// defaults to c++11.
+#if ROCM_VERSION == 70000000 || ROCM_VERSION == 70000001 || \
+    ROCM_VERSION >= 71500000
 #define JITIFY_DEFAULT_CPP_VERSION "c++14"
 #else
 #define JITIFY_DEFAULT_CPP_VERSION "c++11"
@@ -2780,7 +2788,7 @@ inline bool process_architecture_flags(StringVec* compiler_options,
   }
   return true;
 }
-// NOTE(HIP/AMD): we should use c++11. Issue #54.
+// NOTE(HIP/AMD): the default is JITIFY_DEFAULT_CPP_VERSION. Issue #54.
 inline void add_std_flag_if_not_specified(StringVec* options,
                                           std::string value = JITIFY_DEFAULT_CPP_VERSION) {
   for (const std::string& option : *options) {
@@ -2790,8 +2798,8 @@ inline void add_std_flag_if_not_specified(StringVec* options,
       return;
     }
   }
-  // Jitify must be compiled with C++11 support, so we default to enabling it
-  // for the JIT-compiled code too.
+  // No standard was specified, so we default the JIT-compiled code to
+  // JITIFY_DEFAULT_CPP_VERSION.
   options->push_back("-std=" + value);
 }
 
@@ -3243,7 +3251,7 @@ inline CompiledProgram CompiledProgram::compile(
                                           &error)) {
     return Error("Failed to process architecture flags: " + error);
   }
-  detail::add_std_flag_if_not_specified(&compiler_options, JITIFY_DEFAULT_CPP_VERSION); // NOTE(HIP/AMD): we should use c++11. Issue #54.
+  detail::add_std_flag_if_not_specified(&compiler_options, JITIFY_DEFAULT_CPP_VERSION); // NOTE(HIP/AMD): see JITIFY_DEFAULT_CPP_VERSION. Issue #54.
   detail::add_cwd_include_path(&compiler_options);
   // NOTE(HIP/AMD): Not supported.
   // bool should_remove_unused_globals = detail::pop_flag(

@@ -1086,16 +1086,10 @@ __global__ void constant_test(int* x) {
 
 TEST(Jitify2Test, InvalidPrograms) {
   // OK.
-  // NOTE(AMD/HIP): hiprtc cannot compile with c++11 on ROCm 7.0.0 and 7.0.0. Issue #54.
-  #if ROCM_VERSION == 70000000 || ROCM_VERSION == 70000001
-    EXPECT_EQ(get_error(Program("empty_program", "")->preprocess({"-no-preinclude-workarounds"})),
+  // NOTE(AMD/HIP): the default standard is JITIFY_DEFAULT_CPP_VERSION. Issue #54.
+  EXPECT_EQ(get_error(Program("empty_program", "")->preprocess({"-no-preinclude-workarounds"})),
             "Compilation failed: HIPRTC_ERROR_INVALID_INPUT\nCompiler options: "
-            "\"-std=c++14\"\n");
-  #else
-    EXPECT_EQ(get_error(Program("empty_program", "")->preprocess({"-no-preinclude-workarounds"})),
-            "Compilation failed: HIPRTC_ERROR_INVALID_INPUT\nCompiler options: "
-            "\"-std=c++11\"\n");
-  #endif
+            "\"-std=" JITIFY_DEFAULT_CPP_VERSION "\"\n");
 
   // OK.
   // NOTE(HIP/AMD): HIP and libhipcxx include paths required here to include libhipcxx headers.
