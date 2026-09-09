@@ -1317,9 +1317,15 @@ inline LibCuda& cuda() {
 namespace detail {
 
 inline std::string get_cuda_error_string(CUresult ret) {
-  const char* error_c;
-  (void)cuda().GetErrorString()(ret, &error_c);
-  return "CUDA error " + std::to_string(ret) + ": " + error_c;
+  // NOTE(HIP/AMD): GetErrorString leaves the out pointer untouched when it does
+  // not recognise the code, so the pointer must be initialised and the result
+  // checked before it is dereferenced. Otherwise reporting an unrecognised
+  // error crashes instead of describing it.
+  const char* error_c = nullptr;
+  CUresult str_ret = cuda().GetErrorString()(ret, &error_c);
+  std::string result = "CUDA error " + std::to_string(ret);
+  if (str_ret == CUDA_SUCCESS && error_c) result += std::string(": ") + error_c;
+  return result;
 }
 
 }  // namespace detail
@@ -2618,6 +2624,35 @@ inline int get_current_device_compute_capability(std::string* error = nullptr) {
     }
   }
   return arch_num;
+}
+
+// NOTE(HIP/AMD): Returns the ISA feature suffix of the current device in a form
+// that is safe to embed in a file name, e.g. "sramecc+:xnack+" becomes
+// "srameccP_xnackP". Returns an empty string if the device reports no features
+// or if it cannot be queried.
+//
+// Code objects are specific to the full device ISA, not just the architecture
+// number: a module built for xnack- cannot be loaded on the same GPU when the
+// runtime is in xnack+ mode (HSA_XNACK=1) and vice versa. The features must
+// therefore be part of any key under which compiled code is cached.
+inline std::string get_current_device_isa_features() {
+  CUdevice device;
+  cudaDeviceProp device_prop;
+  if (!cuda()) return "";
+  if (cuda().CtxGetDevice()(&device) != CUDA_SUCCESS ||
+      cuda().GetDeviceProperties()(&device_prop, device) != CUDA_SUCCESS) {
+    return "";
+  }
+  std::string full_arch_name(device_prop.gcnArchName);
+  size_t features_begin = full_arch_name.find(':');
+  if (features_begin == std::string::npos) return "";
+  std::string features = full_arch_name.substr(features_begin + 1);
+  for (char& c : features) {
+    if (c == ':') c = '_';
+    else if (c == '+') c = 'P';
+    else if (c == '-') c = 'M';
+  }
+  return features;
 }
 
 // Returns 0 on failure and sets *error if provided. Otherwise returns a compute
@@ -6698,10 +6733,17 @@ class ProgramCache {
                                       error);
         }
       }
+      // NOTE(HIP/AMD): the architecture number alone does not identify the ISA
+      // a code object was built for, so the device's feature flags go into the
+      // file name as well. Without them a module cached in xnack- mode is
+      // picked up in xnack+ mode, where loading it fails.
+      std::string isa_features = detail::get_current_device_isa_features();
       std::stringstream filename_ss;
       filename_ss.imbue(std::locale::classic());
-      filename_ss << to_filename_(key) << ".gfx" << compute_capability << ".v"
-                  << std::hex << serialization::kSerializationVersion;
+      filename_ss << to_filename_(key) << ".gfx" << compute_capability;
+      if (!isa_features.empty()) filename_ss << "." << isa_features;
+      filename_ss << ".v" << std::hex
+                  << serialization::kSerializationVersion;
       LinkedProgram linked;
       error = file_cache_.get(
           filename_ss.str(), &linked,
