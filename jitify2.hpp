@@ -1231,13 +1231,20 @@ class LibCuda
  public:
   LibCuda() {
 #if !JITIFY_LINK_CUDA_STATIC
+    // Open the soname first: the dynamic loader only reuses an already loaded
+    // HIP runtime (e.g. the one of the application or of the rocm-sdk Python
+    // wheels) if the requested name matches its soname. The unversioned name
+    // may resolve to a second HIP runtime elsewhere on the library path, or
+    // may not exist at all (runtime-only installations).
     std::string libname =
 #if defined(_WIN32) || defined(_WIN64)
 #pragma error "Windows is currently not supported"
 #else
-    "libamdhip64.so";
+        "libamdhip64.so." + std::to_string(HIP_VERSION_MAJOR);
 #endif
-    this->open(libname.c_str());
+    if (!this->open(libname.c_str())) {
+      this->open("libamdhip64.so");
+    }
 #endif  // !JITIFY_LINK_CUDA_STATIC
   }
 
