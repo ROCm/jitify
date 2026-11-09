@@ -134,11 +134,19 @@ $ make doc
 
 The HTML and LaTeX results are placed into the doc/ subdirectory.
 
-# Requirements
-- ROCm and HIP 7.2
-- CMake 3.9 or higher (for building the tests)
-- AMD MI100/MI200/MI300 GPUs
-- Linux distribution (tested with Ubuntu 20.04+)
+# Supported Platforms
+- This release of Jitify has been successfully tested on AMD GPUs with
+  ROCm 7.2.3, on Ubuntu 24.04 and 22.04.
+- The following architectures have been tested successfully for this release:
+  - gfx90a (MI210X/MI250)
+  - gfx942 (MI300X/MI325X)
+  - gfx950 (MI355X)
+- Jitify requires ROCm and HIP 7.2 or newer.
+- Jitify itself is a single header and requires a C++11 compliant compiler.
+  The tests are built using CMake 3.9 or higher and require a C++14 compliant
+  compiler.
+- The libhipcxx tests (`JITIFY_ENABLE_LIBHIPCXX_TESTS`, on by default) obtain
+  libhipcxx through ROCmDS-CMake.
 
 # Current Limitations
 - No support for Windows.
